@@ -1,6 +1,7 @@
 import networkx as nx
 import matplotlib.pyplot as plt
 from torch_geometric.utils.convert import from_networkx
+import torch_geometric.datasets as torch_datasets
 
 
 def get_orbits(graph: nx.Graph):
@@ -43,9 +44,6 @@ print(G.edges)
 print('orbits:', get_orbits(graph=G))
 print()
 
-nx.draw(G)
-plt.show()
-
 # Convert the graph into PyTorch geometric
 pyg_graph = from_networkx(G)
 
@@ -53,3 +51,6 @@ print('graph:\n', pyg_graph, '\n\n')
 print('x:\n', pyg_graph.x, '\n\n')
 print('y:\n', pyg_graph.y, '\n\n')
 print('edge index:\n', pyg_graph.edge_index, '\n\n')
+
+mutag_dataset = torch_datasets.TUDataset(root='./datasets', name='MUTAG')
+print(mutag_dataset)
