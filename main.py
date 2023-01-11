@@ -88,7 +88,7 @@ print('--- ENZYMES orbits ---')
 skip_count = 0
 for i, graph in enumerate(enzymes_nx):
     # print(i, '//', len(enzymes_nx), '| #nodes =', len(graph), '| #edges =', graph.number_of_edges())
-    if len(graph) > 66:
+    if len(graph) > 30:  # can do 66 in <20 seconds
         # print('graph too large to check for now, skipping')
         skip_count += 1
         continue
@@ -101,3 +101,20 @@ for i, graph in enumerate(enzymes_nx):
         plot_labeled_graph(graph, orbits=orbits)
 print('done checking:', skip_count, 'graphs skipped')
 
+proteins_nx = get_nx_molecule_dataset('PROTEINS')
+# random.shuffle(enzymes_nx)
+
+print('--- PROTEINS orbits ---')
+skip_count = 0
+for i, graph in enumerate(proteins_nx):
+    if len(graph) > 60:  # can do 60 in <10 seconds
+        skip_count += 1
+        continue
+    orbits = get_orbits(graph)
+    orbit_WL_iterations, WL_orbits = get_wl_orbits(graph)
+    if not orbits == WL_orbits:
+        print('orbits:   ', orbits)
+        print('WL orbits:', WL_orbits)
+        print('orbit-WL iterations:', orbit_WL_iterations)
+        plot_labeled_graph(graph, orbits=orbits)
+print('done checking:', skip_count, 'graphs skipped')
