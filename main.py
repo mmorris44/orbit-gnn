@@ -1,84 +1,12 @@
+import random
 import networkx as nx
 import matplotlib.pyplot as plt
-from torch_geometric.utils.convert import from_networkx, to_networkx
-import torch_geometric.datasets as torch_datasets
-import numpy as np
+from torch_geometric.utils.convert import from_networkx
 from typing import List, Optional
-import random
 
-
-def get_orbits(graph: nx.Graph):
-    node_list = list(graph.nodes)[1:]
-    orbits = [[list(graph.nodes)[0]]]
-    isomorphisms = [iso for iso in nx.vf2pp_all_isomorphisms(graph, graph, node_label='x')]
-
-    for node in node_list:
-        found_orbit = False
-        for orbit_index, orbit in enumerate(orbits):
-            orbit_node = orbit[0]
-            for isomorphism in isomorphisms:
-                if isomorphism[node] == orbit_node or isomorphism[orbit_node] == node:
-                    found_orbit = True
-                    break
-            if found_orbit:
-                orbits[orbit_index].append(node)
-                break
-        if not found_orbit:
-            orbits.append([node])
-    return orbits
-
-
-# input is a list of ints but is treated as unordered by sorting first
-def multi_set_hash_function(input_set: list):
-    return hash(tuple(sorted(input_set)))
-
-
-def orbit_WL(graph: nx.Graph):
-    labels = [-1] * len(graph)
-    node_attributes = nx.get_node_attributes(graph, 'x')
-    if node_attributes:
-        for node in graph.nodes:
-            labels[node] = hash(node_attributes[node])  # initial labels are hashes
-    num_unique = len(set(labels))
-
-    for wl_iteration in range(1, len(graph) + 1):
-        previous_labels = labels[:]
-        previous_num_unique = num_unique
-        global_hash = multi_set_hash_function(previous_labels)
-
-        for node in graph.nodes:
-            neighbours = graph[node]
-            neighbour_labels = []
-            for neighbour in neighbours:
-                neighbour_labels.append(previous_labels[neighbour])
-            neighbour_hash = multi_set_hash_function(neighbour_labels)
-            combined_hash = hash((previous_labels[node], neighbour_hash, global_hash))
-            labels[node] = combined_hash
-
-        num_unique = len(set(labels))
-        if num_unique == previous_num_unique:
-            # orbit WL has converged
-            return wl_iteration, labels
-    raise Exception('WL did not converge: something is wrong with the algorithm')
-
-
-def get_WL_orbits(graph: nx.Graph):
-    n_iterations, final_labels = orbit_WL(graph)
-    node_list = list(graph.nodes)[1:]
-    orbits = [[list(graph.nodes)[0]]]
-
-    for node in node_list:
-        found_orbit = False
-        for orbit_index, orbit in enumerate(orbits):
-            orbit_node = orbit[0]
-
-            if final_labels[node] == final_labels[orbit_node]:
-                orbits[orbit_index].append(node)
-                found_orbit = True
-        if not found_orbit:
-            orbits.append([node])
-
-    return n_iterations, orbits
+from graph_theory import get_orbits
+from wl import get_wl_orbits
+from datasets import get_nx_molecule_dataset
 
 
 def plot_labeled_graph(graph: nx.Graph, orbits: Optional[List[List[int]]] = None, show_node_id: bool = True):
@@ -140,26 +68,36 @@ print('x:\n', pyg_graph.x, '\n\n')
 print('y:\n', pyg_graph.y, '\n\n')
 print('edge index:\n', pyg_graph.edge_index, '\n\n')
 
-mutag_dataset = torch_datasets.TUDataset(root='./datasets', name='MUTAG')
-mutag_nx = []
-for graph in mutag_dataset:
-    graph_nx = to_networkx(graph, to_undirected=True, remove_self_loops=True, node_attrs=['x'])
-    # convert node attributes from one-hot encoding into number
-    node_attributes = nx.get_node_attributes(graph_nx, 'x')
-    for node, attribute in node_attributes.items():
-        attribute = np.array(attribute)
-        non_zero_index = np.nonzero(attribute)[0][0]
-        node_attributes[node] = non_zero_index
-    nx.set_node_attributes(graph_nx, node_attributes, 'x')
-    mutag_nx.append(graph_nx)
+mutag_nx = get_nx_molecule_dataset('MUTAG')
 random.shuffle(mutag_nx)  # shuffle dataset
 
 print('--- MUTAG orbits ---')
 for graph in mutag_nx:
     orbits = get_orbits(graph)
-    orbit_WL_iterations, WL_orbits = get_WL_orbits(graph)
+    orbit_WL_iterations, WL_orbits = get_wl_orbits(graph)
     if not orbits == WL_orbits:
         print('orbits:   ', orbits)
         print('WL orbits:', WL_orbits)
         print('orbit-WL iterations:', orbit_WL_iterations)
         plot_labeled_graph(graph, orbits=orbits)
+
+enzymes_nx = get_nx_molecule_dataset('ENZYMES')
+# random.shuffle(enzymes_nx)
+
+print('--- ENZYMES orbits ---')
+skip_count = 0
+for i, graph in enumerate(enzymes_nx):
+    # print(i, '//', len(enzymes_nx), '| #nodes =', len(graph), '| #edges =', graph.number_of_edges())
+    if len(graph) > 66:
+        # print('graph too large to check for now, skipping')
+        skip_count += 1
+        continue
+    orbits = get_orbits(graph)
+    orbit_WL_iterations, WL_orbits = get_wl_orbits(graph)
+    if not orbits == WL_orbits:
+        print('orbits:   ', orbits)
+        print('WL orbits:', WL_orbits)
+        print('orbit-WL iterations:', orbit_WL_iterations)
+        plot_labeled_graph(graph, orbits=orbits)
+print('done checking:', skip_count, 'graphs skipped')
+
