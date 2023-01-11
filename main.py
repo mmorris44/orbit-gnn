@@ -28,13 +28,66 @@ def get_orbits(graph: nx.Graph):
     return orbits
 
 
-def plot_labeled_graph(graph: nx.Graph, orbits: Optional[List[List[int]]] = None, show_node_id: bool = False):
+# input is a list of ints but is treated as unordered by sorting first
+def multi_set_hash_function(input_set: list):
+    return hash(tuple(sorted(input_set)))
+
+
+def orbit_WL(graph: nx.Graph):
+    labels = [-1] * len(graph)
+    node_attributes = nx.get_node_attributes(graph, 'x')
+    if node_attributes:
+        for node in graph.nodes:
+            labels[node] = hash(node_attributes[node])  # initial labels are hashes
+    num_unique = len(set(labels))
+
+    for wl_iteration in range(1, len(graph) + 1):
+        previous_labels = labels[:]
+        previous_num_unique = num_unique
+        global_hash = multi_set_hash_function(previous_labels)
+
+        for node in graph.nodes:
+            neighbours = graph[node]
+            neighbour_labels = []
+            for neighbour in neighbours:
+                neighbour_labels.append(previous_labels[neighbour])
+            neighbour_hash = multi_set_hash_function(neighbour_labels)
+            combined_hash = hash((previous_labels[node], neighbour_hash, global_hash))
+            labels[node] = combined_hash
+
+        num_unique = len(set(labels))
+        if num_unique == previous_num_unique:
+            # orbit WL has converged
+            return wl_iteration, labels
+    raise Exception('WL did not converge: something is wrong with the algorithm')
+
+
+def get_WL_orbits(graph: nx.Graph):
+    n_iterations, final_labels = orbit_WL(graph)
+    node_list = list(graph.nodes)[1:]
+    orbits = [[list(graph.nodes)[0]]]
+
+    for node in node_list:
+        found_orbit = False
+        for orbit_index, orbit in enumerate(orbits):
+            orbit_node = orbit[0]
+
+            if final_labels[node] == final_labels[orbit_node]:
+                orbits[orbit_index].append(node)
+                found_orbit = True
+        if not found_orbit:
+            orbits.append([node])
+
+    return n_iterations, orbits
+
+
+def plot_labeled_graph(graph: nx.Graph, orbits: Optional[List[List[int]]] = None, show_node_id: bool = True):
     pos = nx.spring_layout(graph, seed=1)
     options = {"edgecolors": "tab:gray", "node_size": 800, "alpha": 1}
 
-    node_color = [0] * len(graph.nodes)
+    node_color = [0] * len(graph)
     if orbits is not None:
-        node_color = [0] * len(graph.nodes)
+        node_color = [0] * len(graph)
         for node in graph.nodes:
             orbit_index = 0
             for i, orbit in enumerate(orbits):
@@ -96,7 +149,6 @@ for graph in mutag_dataset:
     for node, attribute in node_attributes.items():
         attribute = np.array(attribute)
         non_zero_index = np.nonzero(attribute)[0][0]
-        print(non_zero_index)
         node_attributes[node] = non_zero_index
     nx.set_node_attributes(graph_nx, node_attributes, 'x')
     mutag_nx.append(graph_nx)
@@ -105,5 +157,9 @@ random.shuffle(mutag_nx)  # shuffle dataset
 print('--- MUTAG orbits ---')
 for graph in mutag_nx:
     orbits = get_orbits(graph)
-    print(get_orbits(graph))
-    plot_labeled_graph(graph, orbits=orbits)
+    orbit_WL_iterations, WL_orbits = get_WL_orbits(graph)
+    if not orbits == WL_orbits:
+        print('orbits:   ', orbits)
+        print('WL orbits:', WL_orbits)
+        print('orbit-WL iterations:', orbit_WL_iterations)
+        plot_labeled_graph(graph, orbits=orbits)
