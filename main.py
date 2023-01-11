@@ -4,6 +4,7 @@ from torch_geometric.utils.convert import from_networkx, to_networkx
 import torch_geometric.datasets as torch_datasets
 import numpy as np
 from typing import List, Optional
+import random
 
 
 def get_orbits(graph: nx.Graph):
@@ -27,9 +28,9 @@ def get_orbits(graph: nx.Graph):
     return orbits
 
 
-def plot_labeled_graph(graph: nx.Graph, orbits: Optional[List[List[int]]] = None):
+def plot_labeled_graph(graph: nx.Graph, orbits: Optional[List[List[int]]] = None, show_node_id: bool = False):
     pos = nx.spring_layout(graph, seed=1)
-    options = {"edgecolors": "tab:gray", "node_size": 800, "alpha": 0.9}
+    options = {"edgecolors": "tab:gray", "node_size": 800, "alpha": 1}
 
     node_color = [0] * len(graph.nodes)
     if orbits is not None:
@@ -40,17 +41,17 @@ def plot_labeled_graph(graph: nx.Graph, orbits: Optional[List[List[int]]] = None
                 if node in orbit:
                     orbit_index = i
                     break
-            node_color[node] = orbit_index
+            node_color[node] = orbit_index + 1
             if len(orbits[orbit_index]) == 1:
-                node_color[node] = -1  # do not color nodes that are in their own orbit
+                node_color[node] = 0  # do not color nodes that are in their own orbit
 
-    nx.draw_networkx_nodes(graph, pos, **options, node_color=node_color, cmap=plt.cm.tab20c)
+    nx.draw_networkx_nodes(graph, pos, **options, node_color=node_color, cmap=plt.cm.tab20)
     nx.draw_networkx_edges(graph, pos, width=1, alpha=0.5)
     labels = nx.get_node_attributes(graph, 'x')
     # append node ID to label
-    for node, label in labels.items():
-        labels[node] = str(node) + ':' + str(label)
-    print('labels:', labels)
+    if show_node_id:
+        for node, label in labels.items():
+            labels[node] = str(node) + ':' + str(label)
     nx.draw_networkx_labels(graph, pos, labels, font_size=10, font_color='black')
     plt.tight_layout()
     plt.axis("off")
@@ -99,6 +100,7 @@ for graph in mutag_dataset:
         node_attributes[node] = non_zero_index
     nx.set_node_attributes(graph_nx, node_attributes, 'x')
     mutag_nx.append(graph_nx)
+random.shuffle(mutag_nx)  # shuffle dataset
 
 print('--- MUTAG orbits ---')
 for graph in mutag_nx:
