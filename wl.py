@@ -2,6 +2,9 @@ from typing import Tuple, List
 
 import networkx as nx
 
+from graph_theory import get_orbits
+from plotting import plot_labeled_graph
+
 
 # input is a list of ints but is treated as unordered by sorting first
 def multi_set_hash_function(input_set: list) -> int:
@@ -54,3 +57,31 @@ def get_wl_orbits(graph: nx.Graph) -> Tuple[int, List[List[int]]]:
             orbits.append([node])
 
     return n_iterations, orbits
+
+
+def check_orbits_against_wl(
+        nx_dataset: List[nx.Graph],
+        max_graph_size_to_check: int = 1000,
+        plot_counter_examples=True,
+):
+    orbit_size_counts = {i: 0 for i in range(1, 1001)}  # track how many of each orbit size there is
+    skip_count = 0
+    for i, graph in enumerate(nx_dataset):
+        # print(i, '//', len(enzymes_nx), '| #nodes =', len(graph), '| #edges =', graph.number_of_edges())
+        if len(graph) > max_graph_size_to_check:
+            # print('graph too large to check for now, skipping')
+            skip_count += 1
+            continue
+        orbits = get_orbits(graph)
+        for orbit in orbits:
+            orbit_size_counts[len(orbit)] += 1
+        orbit_wl_iterations, wl_orbits = get_wl_orbits(graph)
+        if not orbits == wl_orbits:
+            print('counter-example found:')
+            print('orbits:   ', orbits)
+            print('WL orbits:', wl_orbits)
+            print('orbit-WL iterations:', orbit_wl_iterations)
+            if plot_counter_examples:
+                plot_labeled_graph(graph, orbits=orbits)
+    print('done checking:', skip_count, 'graphs skipped')
+    print('orbit sizes:', {size: orbit_size_counts[size] for size in range(1, 1001) if orbit_size_counts[size] > 0})
