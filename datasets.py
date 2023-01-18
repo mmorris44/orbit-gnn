@@ -27,7 +27,7 @@ def nx_molecule_dataset(name='MUTAG') -> List[nx.Graph]:
 
 
 # each returned graph will contain node attributes 'y' for target outputs
-# one-hot encode both 'x' and 'y' values
+# one-hot encode the 'x' values
 # see https://pytorch-geometric.readthedocs.io/en/latest/notes/data_cheatsheet.html for #features
 def orbit_molecule_dataset(dataset: List[nx.Graph], num_features: int) -> List[nx.Graph]:
     orbit_dataset = []
@@ -50,12 +50,12 @@ def orbit_molecule_dataset(dataset: List[nx.Graph], num_features: int) -> List[n
         # one-hot encode the node attributes
         current_node_attributes = nx.get_node_attributes(graph, 'x')
         for node, attribute in current_node_attributes.items():
-            one_hot_encoding = [0] * num_features
-            one_hot_encoding[attribute] = 1
+            one_hot_encoding = [0.0] * num_features
+            one_hot_encoding[attribute] = 1.0
             current_node_attributes[node] = tuple(one_hot_encoding)
 
         node_attributes = {node: {'x': current_node_attributes[node],
-                                  'y': (0, 1) if node == target_node_index else (1, 0)}
+                                  'y': 1 if node == target_node_index else 0}
                            for node in graph.nodes}
 
         orbit_graph = copy.deepcopy(graph)
