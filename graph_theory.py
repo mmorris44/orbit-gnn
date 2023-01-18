@@ -3,7 +3,7 @@ from typing import List
 import networkx as nx
 
 
-def get_orbits(graph: nx.Graph) -> List[List[int]]:
+def compute_orbits(graph: nx.Graph) -> List[List[int]]:
     node_list = list(graph.nodes)[1:]
     orbits = [[list(graph.nodes)[0]]]
     isomorphisms = [iso for iso in nx.vf2pp_all_isomorphisms(graph, graph, node_label='x')]

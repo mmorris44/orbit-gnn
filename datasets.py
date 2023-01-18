@@ -7,10 +7,10 @@ from torch_geometric.loader import DataLoader
 from torch_geometric.utils.convert import to_networkx, from_networkx
 import networkx as nx
 
-from wl import get_wl_orbits
+from wl import wl_orbits
 
 
-def get_nx_molecule_dataset(name='MUTAG') -> List[nx.Graph]:
+def nx_molecule_dataset(name='MUTAG') -> List[nx.Graph]:
     torch_dataset = torch_datasets.TUDataset(root='./datasets', name=name)
     nx_dataset = []
     for graph in torch_dataset:
@@ -27,11 +27,11 @@ def get_nx_molecule_dataset(name='MUTAG') -> List[nx.Graph]:
 
 
 # each returned graph will contain node attributes 'y' for target outputs
-def get_orbit_molecule_dataset(dataset: List[nx.Graph]) -> List[nx.Graph]:
+def orbit_molecule_dataset(dataset: List[nx.Graph]) -> List[nx.Graph]:
     orbit_dataset = []
     trivial_orbits_only_count = 0
     for graph_index, graph in enumerate(dataset):
-        _, orbits = get_wl_orbits(graph)  # maybe change this in future to use actual orbits?
+        _, orbits = wl_orbits(graph)  # maybe change this in future to use actual orbits?
         # find the first >=2-sized orbit
         non_trivial_orbit_index = -1
         for i, orbit in enumerate(orbits):
@@ -57,7 +57,7 @@ def get_orbit_molecule_dataset(dataset: List[nx.Graph]) -> List[nx.Graph]:
     return orbit_dataset
 
 
-def get_pyg_dataloader_from_nx(nx_graphs: List[nx.Graph], batch_size=8) -> DataLoader:
+def pyg_dataloader_from_nx(nx_graphs: List[nx.Graph], batch_size=8) -> DataLoader:
     pyg_list = []
     for graph in nx_graphs:
         pyg_list.append(from_networkx(graph))

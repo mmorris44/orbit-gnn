@@ -2,7 +2,7 @@ from typing import Tuple, List
 
 import networkx as nx
 
-from graph_theory import get_orbits
+from graph_theory import compute_orbits
 from plotting import plot_labeled_graph
 
 
@@ -40,7 +40,7 @@ def orbit_wl(graph: nx.Graph) -> Tuple[int, List[int]]:
     raise Exception('WL did not converge: something is wrong with the algorithm')
 
 
-def get_wl_orbits(graph: nx.Graph) -> Tuple[int, List[List[int]]]:
+def wl_orbits(graph: nx.Graph) -> Tuple[int, List[List[int]]]:
     n_iterations, final_labels = orbit_wl(graph)
     node_list = list(graph.nodes)[1:]
     orbits = [[list(graph.nodes)[0]]]
@@ -72,10 +72,10 @@ def check_orbits_against_wl(
             # print('graph too large to check for now, skipping')
             skip_count += 1
             continue
-        orbits = get_orbits(graph)
+        orbits = orbits(graph)
         for orbit in orbits:
             orbit_size_counts[len(orbit)] += 1
-        orbit_wl_iterations, wl_orbits = get_wl_orbits(graph)
+        orbit_wl_iterations, wl_orbits = wl_orbits(graph)
         if not orbits == wl_orbits:
             print('counter-example found:')
             print('orbits:   ', orbits)
