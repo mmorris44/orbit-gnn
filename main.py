@@ -4,8 +4,7 @@ from torch_geometric.utils.convert import from_networkx
 
 from graph_theory import get_orbits
 from wl import check_orbits_against_wl
-from datasets import get_nx_molecule_dataset
-
+from datasets import get_nx_molecule_dataset, get_orbit_molecule_dataset, get_pyg_dataloader_from_nx
 
 G = nx.Graph()
 
@@ -38,18 +37,19 @@ print('edge index:\n', pyg_graph.edge_index, '\n\n')
 
 mutag_nx = get_nx_molecule_dataset('MUTAG')
 random.shuffle(mutag_nx)  # shuffle dataset
-
-print('\n--- MUTAG orbits ---')
-check_orbits_against_wl(mutag_nx)
-
 enzymes_nx = get_nx_molecule_dataset('ENZYMES')
-# random.shuffle(enzymes_nx)
-
-print('\n--- ENZYMES orbits ---')
-check_orbits_against_wl(enzymes_nx, max_graph_size_to_check=66)  # can do 66 in <30 seconds
-
 proteins_nx = get_nx_molecule_dataset('PROTEINS')
-# random.shuffle(enzymes_nx)
 
-print('\n--- PROTEINS orbits ---')
-check_orbits_against_wl(proteins_nx, max_graph_size_to_check=60)  # can do 60 in <10 seconds
+orbit_mutag_nx = get_orbit_molecule_dataset(mutag_nx)
+orbit_mutag_dataloader = get_pyg_dataloader_from_nx(orbit_mutag_nx)
+print(orbit_mutag_dataloader)
+
+
+# print('\n--- MUTAG orbits ---')
+# check_orbits_against_wl(mutag_nx)
+
+# print('\n--- ENZYMES orbits ---')
+# check_orbits_against_wl(enzymes_nx, max_graph_size_to_check=66)  # can do 66 in <30 seconds
+
+# print('\n--- PROTEINS orbits ---')
+# check_orbits_against_wl(proteins_nx, max_graph_size_to_check=60)  # can do 60 in <10 seconds
