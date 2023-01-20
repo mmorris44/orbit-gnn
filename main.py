@@ -3,7 +3,7 @@ import networkx as nx
 import torch
 from torch_geometric.loader import DataLoader
 
-from models import GCN, RniGCN
+from models import GCN, RniGCN, UniqueIdGCN
 from wl import check_orbits_against_wl
 from datasets import nx_molecule_dataset, orbit_molecule_dataset, pyg_dataset_from_nx
 
@@ -42,7 +42,8 @@ train_dataset = orbit_mutag_dataset[0:int(len(orbit_mutag_dataset) * 0.8)]
 test_dataset = orbit_mutag_dataset[int(len(orbit_mutag_dataset) * 0.8):]
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 # model = GCN(num_node_features=7, num_classes=2, gcn_layers=4).to(device)
-model = RniGCN(num_node_features=7, num_classes=2, gcn_layers=4, noise_dims=3).to(device)
+# model = RniGCN(num_node_features=7, num_classes=2, gcn_layers=4, noise_dims=3).to(device)
+model = UniqueIdGCN(num_node_features=7, num_classes=2, gcn_layers=4).to(device)
 optimizer = torch.optim.Adam(model.parameters(), lr=0.01, weight_decay=5e-4)
 
 # train

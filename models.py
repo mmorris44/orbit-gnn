@@ -43,3 +43,16 @@ class RniGCN(GCN):
         extended_data = data.clone()
         extended_data.x = torch.cat((data.x, noise), dim=1)  # [batch * num_nodes, num_node_features + noise_dims]
         return super().forward(extended_data)
+
+
+# does not use one-hot encodings, since graphs have varying sizes
+class UniqueIdGCN(GCN):
+    def __init__(self, num_node_features: int, num_classes: int, gcn_layers=2, hidden_size=16):
+        super().__init__(num_node_features + 1, num_classes, gcn_layers, hidden_size)
+
+    def forward(self, data):
+        # data.x: [batch * num_nodes, num_node_features]
+        ids = torch.unsqueeze(torch.range(1, data.x.size()[0]), dim=1)  # [batch * num_nodes, 1]
+        extended_data = data.clone()
+        extended_data.x = torch.cat((data.x, ids), dim=1)  # [batch * num_nodes, num_node_features + 1]
+        return super().forward(extended_data)
