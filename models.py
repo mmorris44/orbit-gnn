@@ -1,3 +1,5 @@
+import copy
+
 import torch
 import torch.nn.functional as F
 from torch.nn import ModuleList
@@ -37,6 +39,7 @@ class RniGCN(GCN):
 
     def forward(self, data):
         # data.x: [batch * num_nodes, num_node_features]
-        noise = torch.rand(data.x.shape[0], self.noise_dims)  # [batch * num_nodes, noise_dims]
-        data.x = torch.cat((data.x, noise), dim=1)  # [batch * num_nodes, num_node_features + noise_dims]
-        return super().forward(data)
+        noise = torch.rand(data.x.size()[0], self.noise_dims)  # [batch * num_nodes, noise_dims]
+        extended_data = data.clone()
+        extended_data.x = torch.cat((data.x, noise), dim=1)  # [batch * num_nodes, num_node_features + noise_dims]
+        return super().forward(extended_data)

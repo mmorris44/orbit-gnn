@@ -45,7 +45,6 @@ def orbit_molecule_dataset(dataset: List[nx.Graph], num_features: int) -> List[n
             non_trivial_orbit_index = graph_index % len(orbits)
         # assign node from orbit as target
         chosen_orbit = orbits[non_trivial_orbit_index]
-        target_node_index = chosen_orbit[graph_index % len(chosen_orbit)]
 
         # one-hot encode the node attributes
         current_node_attributes = nx.get_node_attributes(graph, 'x')
@@ -54,8 +53,14 @@ def orbit_molecule_dataset(dataset: List[nx.Graph], num_features: int) -> List[n
             one_hot_encoding[attribute] = 1.0
             current_node_attributes[node] = tuple(one_hot_encoding)
 
+        # y for node i will be e.g. [0, 0, 1, 0],
+        # where len(y) = len(chosen_orbit),
+        # y[j] == 1 only once,
+        # and only if (i in chosen_orbit)
+
         node_attributes = {node: {'x': current_node_attributes[node],
-                                  'y': 1 if node == target_node_index else 0}
+                                  'y': tuple([1 if node == target_node_index else 0
+                                              for target_node_index in chosen_orbit])}
                            for node in graph.nodes}
 
         orbit_graph = copy.deepcopy(graph)

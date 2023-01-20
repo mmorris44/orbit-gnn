@@ -7,7 +7,7 @@ from models import GCN, RniGCN
 from wl import check_orbits_against_wl
 from datasets import nx_molecule_dataset, orbit_molecule_dataset, pyg_dataset_from_nx
 
-log_interval = 100
+log_interval = 50
 
 # G = nx.Graph()
 #
@@ -36,30 +36,40 @@ orbit_mutag_dataset = pyg_dataset_from_nx(orbit_mutag_nx)
 # print('y:\n', pyg_graph.y, '\n\n')
 # print('edge index:\n', pyg_graph.edge_index, '\n\n')
 
-
 # set up model
 criterion = torch.nn.CrossEntropyLoss()
-train_dataloader = DataLoader(orbit_mutag_dataset[0:int(len(orbit_mutag_dataset) * 0.8)], batch_size=10)
-test_dataloader = DataLoader(orbit_mutag_dataset[int(len(orbit_mutag_dataset) * 0.8):], batch_size=1)
+train_dataset = orbit_mutag_dataset[0:int(len(orbit_mutag_dataset) * 0.8)]
+test_dataset = orbit_mutag_dataset[int(len(orbit_mutag_dataset) * 0.8):]
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-model = GCN(num_node_features=7, num_classes=2, gcn_layers=4).to(device)
-# model = RniGCN(num_node_features=7, num_classes=2, gcn_layers=4).to(device)
+# model = GCN(num_node_features=7, num_classes=2, gcn_layers=4).to(device)
+model = RniGCN(num_node_features=7, num_classes=2, gcn_layers=4, noise_dims=3).to(device)
 optimizer = torch.optim.Adam(model.parameters(), lr=0.01, weight_decay=5e-4)
 
 # train
 model.train()
 for epoch in range(3000):
     epoch_loss = 0
-    for batch in train_dataloader:
+    for data in train_dataset:
         optimizer.zero_grad()
-        out = model(batch)
-        loss = criterion(out, batch.y)
+
+        out = model(data)  # [N, C], where N = nodes and C = target classes
+
+        # data.y has size [N, P], where N is the number of nodes in the graph,
+        # and P is the number of permutations of acceptable answers
+        # For now, P is exactly the size of the orbit targeted for removal (i.e. permutations on [0, 0, ..., 0, 1])
+
+        possible_targets = torch.swapaxes(data.y, 0, 1)  # [P, N]
+        possible_losses = torch.zeros(possible_targets.size()[0])  # [P]
+        for i, possible_target in enumerate(possible_targets):  # possible_target is [N]
+            possible_losses[i] = criterion(out, possible_target)
+        loss = torch.min(possible_losses)
+
         loss.backward()
         optimizer.step()
         epoch_loss += loss
 
     if (epoch + 1) % log_interval == 0:
-        print(epoch, epoch_loss)
+        print(epoch + 1, epoch_loss)
 
 
 # TODO: test in a way that makes it not matter which node in the orbit gets the target
