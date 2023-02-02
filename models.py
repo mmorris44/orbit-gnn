@@ -4,12 +4,14 @@ import torch
 import torch.nn.functional as F
 from torch.nn import ModuleList
 from torch_geometric.nn import GCNConv
+from torchvision.ops import MLP
 
 
 class GCN(torch.nn.Module):
     def __init__(self, num_node_features: int, num_classes: int, gcn_layers=2, hidden_size=16):
         super().__init__()
         assert gcn_layers > 0
+        self.num_classes = num_classes
         self.conv_layers = []
         for i in range(gcn_layers):
             input_size = num_node_features if i == 0 else hidden_size
@@ -31,6 +33,48 @@ class GCN(torch.nn.Module):
             x = F.relu(x)
             x = F.dropout(x, training=self.training)
 
+
+class MlpGCN(GCN):
+    def __init__(self, num_node_features: int, num_classes: int, gcn_layers=2, hidden_size=16,
+                 max_graph_size=100, mlp_hidden_size=(16,)):
+        super().__init__(num_node_features, num_classes, gcn_layers, hidden_size)
+        input_size = num_node_features if gcn_layers <= 1 else hidden_size  # input size if only one layer
+        self.conv_layers[-1] = GCNConv(input_size, hidden_size)  # correct size of final GCN layer
+
+        # Node outputs will be stacked together with 0s to pad smaller graphs
+        self.mlp = MLP(hidden_size * max_graph_size, list(mlp_hidden_size) + [num_classes * max_graph_size])
+
+    def forward(self, data):
+        output = super().forward(data)
+        # TODO: stack, pad, and pass to MLP
+        return output
+
+
+class UniqueIdDeepSetsGCN(GCN):
+    def __init__(self, num_node_features: int, num_classes: int, gcn_layers=2, hidden_size=16,
+                 theta_mlp_sizes=(16, 20), rho_mlp_sizes=(16,)):
+        super().__init__(num_node_features, num_classes, gcn_layers, hidden_size)
+        input_size = num_node_features if gcn_layers <= 1 else hidden_size  # input size if only one layer
+        self.conv_layers[-1] = GCNConv(input_size, hidden_size)  # correct size of final GCN layer
+
+        self.theta_mlp = MLP(1 + hidden_size, theta_mlp_sizes)  # inner function of DeepSets
+        self.rho_mlp = MLP(theta_mlp_sizes[-1], list(rho_mlp_sizes) + [num_classes])  # outer function
+
+    def forward(self, data):
+        # currently will only work for batch size of 1
+        gcn_output = super().forward(data)  # [batch * num_nodes, hidden_size]
+        final_outputs = torch.zeros((gcn_output.shape[0], self.num_classes))  # [batch * num_nodes, num_classes]
+        for node in range(gcn_output.shape[0]):  # for each node
+            unique_id_tensor = torch.zeros((gcn_output.shape[0], 1))  # [batch * num_nodes, 1]
+            unique_id_tensor[node, 0] = node
+
+            inner_input = torch.cat((unique_id_tensor, gcn_output), dim=1)  # [batch * num_nodes, 1 + hidden_size]
+            inner_output = self.theta_mlp(inner_input)  # [batch * num_nodes, theta_mlp_sizes[-1]]
+
+            summed_outer_input = torch.sum(inner_output, dim=0)  # [theta_mlp_sizes[-1]]
+            outer_output = self.rho_mlp(summed_outer_input)  # [num_classes]
+            final_outputs[node] = outer_output
+        return final_outputs
 
 class RniGCN(GCN):
     def __init__(self, num_node_features: int, num_classes: int, gcn_layers=2, hidden_size=16, noise_dims=2):
