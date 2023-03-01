@@ -7,11 +7,15 @@ from torch_geometric.data import Data
 from torch_geometric.utils.convert import to_networkx, from_networkx
 import networkx as nx
 
-from wl import wl_orbits
+from wl import compute_wl_orbits
 
 
 def nx_molecule_dataset(name='MUTAG') -> List[nx.Graph]:
     torch_dataset = torch_datasets.TUDataset(root='./datasets', name=name)
+    return nx_from_torch_dataset(torch_dataset)
+
+
+def nx_from_torch_dataset(torch_dataset: List[Data]) -> List[nx.Graph]:
     nx_dataset = []
     for graph in torch_dataset:
         graph_nx = to_networkx(graph, to_undirected=True, remove_self_loops=True, node_attrs=['x'])
@@ -33,7 +37,7 @@ def orbit_molecule_dataset(dataset: List[nx.Graph], num_features: int) -> List[n
     orbit_dataset = []
     trivial_orbits_only_count = 0
     for graph_index, graph in enumerate(dataset):
-        _, orbits = wl_orbits(graph)  # maybe change this in future to use actual orbits?
+        _, orbits = compute_wl_orbits(graph)  # maybe change this in future to use actual orbits?
         # find the first >=2-sized orbit
         non_trivial_orbit_index = -1
         for i, orbit in enumerate(orbits):

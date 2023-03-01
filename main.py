@@ -4,8 +4,9 @@ import torch
 from torch_geometric.loader import DataLoader
 
 from models import GCN, RniGCN, UniqueIdGCN, UniqueIdDeepSetsGCN
-from wl import check_orbits_against_wl
-from datasets import nx_molecule_dataset, orbit_molecule_dataset, pyg_dataset_from_nx
+from plotting import plot_labeled_graph
+from wl import check_orbits_against_wl, compute_wl_orbits
+from datasets import nx_molecule_dataset, orbit_molecule_dataset, pyg_dataset_from_nx, nx_from_torch_dataset
 
 log_interval = 1
 
@@ -22,6 +23,20 @@ log_interval = 1
 # G.add_edges_from([
 #     (0, 1), (1, 2), (1, 3), (3, 4), (4, 5), (4, 6)
 # ])
+
+bioisostere_data_list_inputs = torch.load('custom-datasets/chembl_bioisostere_dataset_inputs.pt')
+bioisostere_data_list_targets = torch.load('custom-datasets/chembl_bioisostere_dataset_targets.pt')
+
+bioisostere_nx_inputs = nx_from_torch_dataset(bioisostere_data_list_inputs)
+bioisostere_nx_targets = nx_from_torch_dataset(bioisostere_data_list_targets)
+for graph_num in range(len(bioisostere_nx_inputs)):
+    input_graph = bioisostere_nx_inputs[graph_num]
+    _, wl_orbits = compute_wl_orbits(input_graph)
+    plot_labeled_graph(input_graph, orbits=wl_orbits)
+    target_graph = bioisostere_nx_targets[graph_num]
+    _, wl_orbits = compute_wl_orbits(target_graph)
+    plot_labeled_graph(target_graph, orbits=wl_orbits)
+assert False
 
 mutag_nx = nx_molecule_dataset('MUTAG')
 # random.shuffle(mutag_nx)  # shuffle dataset
