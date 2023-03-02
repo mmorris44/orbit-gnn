@@ -25,21 +25,12 @@ log_interval = 1
 #     (0, 1), (1, 2), (1, 3), (3, 4), (4, 5), (4, 6)
 # ])
 
+print('Loading bioisostere dataset')
 bioisostere_data_list_inputs = torch.load('custom-datasets/chembl_bioisostere_dataset_inputs.pt')
 bioisostere_data_list_targets = torch.load('custom-datasets/chembl_bioisostere_dataset_targets.pt')
-bioisostere_data_list_combined = combined_bioisostere_dataset(bioisostere_data_list_inputs, bioisostere_data_list_targets)
-assert False
-
-bioisostere_nx_inputs = nx_from_torch_dataset(bioisostere_data_list_inputs)
-bioisostere_nx_targets = nx_from_torch_dataset(bioisostere_data_list_targets)
-for graph_num in range(len(bioisostere_nx_inputs)):
-    input_graph = bioisostere_nx_inputs[graph_num]
-    _, wl_orbits = compute_wl_orbits(input_graph)
-    plot_labeled_graph(input_graph, orbits=wl_orbits)
-    target_graph = bioisostere_nx_targets[graph_num]
-    _, wl_orbits = compute_wl_orbits(target_graph)
-    plot_labeled_graph(target_graph, orbits=wl_orbits)
-assert False
+bioisostere_data_list_combined = combined_bioisostere_dataset(
+    bioisostere_data_list_inputs, bioisostere_data_list_targets)
+torch.save(bioisostere_data_list_combined, 'custom-datasets/bioisostere_data_list_combined.pt')
 
 mutag_nx = nx_molecule_dataset('MUTAG')
 # random.shuffle(mutag_nx)  # shuffle dataset
@@ -65,6 +56,7 @@ model = UniqueIdDeepSetsGCN(num_node_features=7, num_classes=2, gcn_layers=4).to
 optimizer = torch.optim.Adam(model.parameters(), lr=0.01, weight_decay=5e-4)
 
 # train
+print('Training model')
 model.train()
 for epoch in range(3000):
     epoch_loss = 0

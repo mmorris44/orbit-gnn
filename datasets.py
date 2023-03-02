@@ -1,6 +1,7 @@
 import copy
 from typing import List
 
+import torch
 import torch_geometric.datasets as torch_datasets
 import numpy as np
 from torch_geometric.data import Data
@@ -87,13 +88,25 @@ def pyg_dataset_from_nx(nx_graphs: List[nx.Graph]) -> List[Data]:
 
 
 # combine the input and output graphs by adding y-values to the input graphs
-# target graph will differ from input graph by one node
+# target graph will differ from input graph by one node (or none)
 def combined_bioisostere_dataset(inputs: List[Data], targets: List[Data]):
+    combined_graphs: List[Data] = []
+
+    # nx versions of graphs
     nx_inputs = nx_from_torch_dataset(inputs)
     nx_targets = nx_from_torch_dataset(targets)
+
+    num_requiring_symmetry_breaking = 0  # keep track of how many swapped nodes come from orbits with >1 node
+    num_bioisosteres = 0  # keep track of how many have target different from input
+
+    node_match_fn = iso.numerical_node_match('x', 0)  # function to check for node equality
+
     for graph_index in range(len(inputs)):
         input_graph, target_graph = nx_inputs[graph_index], nx_targets[graph_index]
-        input_graph_orbits = compute_orbits(input_graph)
+        # check if already isomorphic
+        input_target_same = nx.is_isomorphic(input_graph, target_graph, node_match=node_match_fn)
+        if not input_target_same:
+            num_bioisosteres += 1
 
         # for each node of input graph, set the node label to -1 in both input and target graph
         # graphs are not necessarily in the same order, so need to have an inner loop for target graph
@@ -122,19 +135,47 @@ def combined_bioisostere_dataset(inputs: List[Data], targets: List[Data]):
                 nx.set_node_attributes(target_graph_compare, target_node_attributes)
 
                 # check for isomorphism between input and target compare graphs
-                node_match_fn = iso.numerical_node_match('x', 0)
                 if nx.is_isomorphic(input_graph_compare, target_graph_compare, node_match=node_match_fn):
                     swapped_out_node = input_swap_node
                     swap_out_for = nx.get_node_attributes(target_graph, 'x')[target_swap_node]
                     break
+
             if swapped_out_node != -1:  # isomorphism found in inner loop
                 break
-        # TODO: check for no changes (isomorphic without any swapping)
-        print(swapped_out_node, nx.get_node_attributes(input_graph, 'x')[swapped_out_node], swap_out_for)
         if swapped_out_node == -1:
             # plotting.plot_labeled_graph(input_graph, input_graph_orbits)
             # plotting.plot_labeled_graph(target_graph, compute_orbits(target_graph))
             # issues created by mmpdb not copying floating atoms to the bioisostere
             # must be manually fixed in the dataset csv file
             print('Issue with graph', graph_index)
+            raise Exception('Could not compute which node swaps to form the bioisostere')
+
+        # get graph orbits to save to features
+        input_graph_orbits = compute_orbits(input_graph)
+
+        # check if task requires symmetry breaking
+        for orbit in input_graph_orbits:
+            if swapped_out_node in orbit:  # find the orbit the node is from
+                if len(orbit) > 1 and not input_target_same:
+                    # if bioisostere (target diff from input) and orbit bigger than 1
+                    num_requiring_symmetry_breaking += 1
+                break
+
+        # append combined graph
+        input_graph_pyg = inputs[graph_index]
+        combined_y = torch.zeros_like(input_graph_pyg.x)
+        for node in input_graph.nodes:
+            if node == swapped_out_node:
+                combined_y[node, swap_out_for] = 1.0  # one-hot of new swapped node value
+            else:
+                combined_y[node, :] = input_graph_pyg.x[node]  # do not change node value
+        combined_graph = Data(x=input_graph_pyg.x, edge_index=input_graph_pyg.edge_index,
+                              edge_attr=input_graph_pyg.edge_attr, y=combined_y, orbits=input_graph_orbits)
+        combined_graphs.append(combined_graph)
+
+    print('--- Constructed combined bioisostere dataset ---')
+    print('Actual bioisosteres:', num_bioisosteres, '/', len(inputs))
+    print('Bioisosteres requiring symmetry breaking:', num_requiring_symmetry_breaking, '/', num_bioisosteres)
+    return combined_graphs
+
 
