@@ -6,7 +6,8 @@ from torch_geometric.loader import DataLoader
 from models import GCN, RniGCN, UniqueIdGCN, UniqueIdDeepSetsGCN
 from plotting import plot_labeled_graph
 from wl import check_orbits_against_wl, compute_wl_orbits
-from datasets import nx_molecule_dataset, orbit_molecule_dataset, pyg_dataset_from_nx, nx_from_torch_dataset
+from datasets import nx_molecule_dataset, orbit_molecule_dataset, pyg_dataset_from_nx, nx_from_torch_dataset, \
+    combined_bioisostere_dataset
 
 log_interval = 1
 
@@ -26,6 +27,8 @@ log_interval = 1
 
 bioisostere_data_list_inputs = torch.load('custom-datasets/chembl_bioisostere_dataset_inputs.pt')
 bioisostere_data_list_targets = torch.load('custom-datasets/chembl_bioisostere_dataset_targets.pt')
+bioisostere_data_list_combined = combined_bioisostere_dataset(bioisostere_data_list_inputs, bioisostere_data_list_targets)
+assert False
 
 bioisostere_nx_inputs = nx_from_torch_dataset(bioisostere_data_list_inputs)
 bioisostere_nx_targets = nx_from_torch_dataset(bioisostere_data_list_targets)
