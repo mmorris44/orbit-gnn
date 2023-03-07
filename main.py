@@ -9,7 +9,7 @@ from wl import check_orbits_against_wl, compute_wl_orbits
 from datasets import nx_molecule_dataset, orbit_molecule_dataset, pyg_dataset_from_nx, nx_from_torch_dataset, \
     combined_bioisostere_dataset
 
-log_interval = 1
+log_interval = 10
 
 # G = nx.Graph()
 #
@@ -47,40 +47,63 @@ orbit_mutag_dataset = pyg_dataset_from_nx(orbit_mutag_nx)
 
 # set up model
 criterion = torch.nn.CrossEntropyLoss()
-train_dataset = orbit_mutag_dataset[0:int(len(orbit_mutag_dataset) * 0.8)]
-test_dataset = orbit_mutag_dataset[int(len(orbit_mutag_dataset) * 0.8):]
+# train_dataset = orbit_mutag_dataset[0:int(len(orbit_mutag_dataset) * 0.8)]
+# test_dataset = orbit_mutag_dataset[int(len(orbit_mutag_dataset) * 0.8):]
+train_dataset = bioisostere_data_list_combined[0:int(len(bioisostere_data_list_combined) * 0.8)]
+test_dataset = bioisostere_data_list_combined[int(len(bioisostere_data_list_combined) * 0.8):]
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-# model = GCN(num_node_features=7, num_classes=2, gcn_layers=4).to(device)
+model = GCN(num_node_features=43, num_classes=44, gcn_layers=4).to(device)
 # model = RniGCN(num_node_features=7, num_classes=2, gcn_layers=4, noise_dims=3).to(device)
-model = UniqueIdDeepSetsGCN(num_node_features=7, num_classes=2, gcn_layers=4).to(device)
+# model = UniqueIdDeepSetsGCN(num_node_features=7, num_classes=2, gcn_layers=4).to(device)
 optimizer = torch.optim.Adam(model.parameters(), lr=0.01, weight_decay=5e-4)
 
 # train
 print('Training model')
 model.train()
 for epoch in range(3000):
+    model.training = True
     epoch_loss = 0
     for data in train_dataset:
         optimizer.zero_grad()
 
-        out = model(data)  # [N, C], where N = nodes and C = target classes
+        out = model(data)
+        loss = criterion(out, data.y)
 
-        # data.y has size [N, P], where N is the number of nodes in the graph,
-        # and P is the number of permutations of acceptable answers
-        # For now, P is exactly the size of the orbit targeted for removal (i.e. permutations on [0, 0, ..., 0, 1])
-
-        possible_targets = torch.swapaxes(data.y, 0, 1)  # [P, N]
-        possible_losses = torch.zeros(possible_targets.size()[0])  # [P]
-        for i, possible_target in enumerate(possible_targets):  # possible_target is [N]
-            possible_losses[i] = criterion(out, possible_target)
-        loss = torch.min(possible_losses)
+        # out = model(data)  # [N, C], where N = nodes and C = target classes
+        #
+        # # data.y has size [N, P], where N is the number of nodes in the graph,
+        # # and P is the number of permutations of acceptable answers
+        # # For now, P is exactly the size of the orbit targeted for removal (i.e. permutations on [0, 0, ..., 0, 1])
+        #
+        # possible_targets = torch.swapaxes(data.y, 0, 1)  # [P, N]
+        # possible_losses = torch.zeros(possible_targets.size()[0])  # [P]
+        # for i, possible_target in enumerate(possible_targets):  # possible_target is [N]
+        #     possible_losses[i] = criterion(out, possible_target)
+        # loss = torch.min(possible_losses)
 
         loss.backward()
         optimizer.step()
         epoch_loss += loss
 
     if (epoch + 1) % log_interval == 0:
-        print(epoch + 1, epoch_loss)
+
+        total_graph_accuracy = 0
+        total_node_accuracy = 0
+
+        # train accuracy
+        model.training = False
+        for data in train_dataset:
+            out = model(data)
+            # gets 0.9375 node accuracy if just returning input (out = data.x)
+            predictions = torch.argmax(out, dim=1)  # no need to softmax, since it's monotonic
+            ground_truth = torch.argmax(data.y, dim=1)
+            node_accuracy = torch.sum(predictions == ground_truth) / predictions.size()[0]
+            graph_accuracy = 0 if node_accuracy < 0.99 else 1
+            total_node_accuracy += node_accuracy
+            total_graph_accuracy += graph_accuracy
+
+        print(model(train_dataset[7]))
+        print(epoch + 1, epoch_loss, total_node_accuracy / len(train_dataset), total_graph_accuracy / len(train_dataset))
 
 
 # TODO: test in a way that makes it not matter which node in the orbit gets the target

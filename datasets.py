@@ -89,7 +89,14 @@ def pyg_dataset_from_nx(nx_graphs: List[nx.Graph]) -> List[Data]:
 
 # combine the input and output graphs by adding y-values to the input graphs
 # target graph will differ from input graph by one node (or none)
-def combined_bioisostere_dataset(inputs: List[Data], targets: List[Data]):
+def combined_bioisostere_dataset(inputs: List[Data], targets: List[Data], no_change_input_option=True):
+    """Combine bioisostere inputs and targets into one dataset.
+
+    :param inputs: source molecules
+    :param targets: optimal bioisosteres
+    :param no_change_input_option: for each node, add element to vector which when 1 implies no change from input
+    :return:
+    """
     combined_graphs: List[Data] = []
 
     # nx versions of graphs
@@ -163,10 +170,17 @@ def combined_bioisostere_dataset(inputs: List[Data], targets: List[Data]):
 
         # append combined graph
         input_graph_pyg = inputs[graph_index]
-        combined_y = torch.zeros_like(input_graph_pyg.x)
+        if no_change_input_option:
+            # last element =1 means no change from input
+            combined_y = torch.zeros(input_graph_pyg.x.size()[0], input_graph_pyg.x.size()[1] + 1)
+        else:
+            combined_y = torch.zeros_like(input_graph_pyg.x)
+
         for node in input_graph.nodes:
-            if node == swapped_out_node:
+            if node == swapped_out_node and not input_target_same:
                 combined_y[node, swap_out_for] = 1.0  # one-hot of new swapped node value
+            elif no_change_input_option:
+                combined_y[node, -1] = 1.0  # set flag for no change of node value
             else:
                 combined_y[node, :] = input_graph_pyg.x[node]  # do not change node value
         combined_graph = Data(x=input_graph_pyg.x, edge_index=input_graph_pyg.edge_index,
