@@ -8,7 +8,7 @@ from torchvision.ops import MLP
 
 
 class GCN(torch.nn.Module):
-    def __init__(self, num_node_features: int, num_classes: int, gcn_layers=2, hidden_size=16):
+    def __init__(self, num_node_features: int, num_classes: int, gcn_layers=2, hidden_size=64):
         super().__init__()
         assert gcn_layers > 0
         self.num_classes = num_classes
@@ -31,7 +31,7 @@ class GCN(torch.nn.Module):
             # any other layer
             x = conv(x, edge_index)
             x = F.relu(x)
-            x = F.dropout(x, training=self.training)
+            # x = F.dropout(x, training=self.training)
 
 
 class MlpGCN(GCN):

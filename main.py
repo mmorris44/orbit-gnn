@@ -102,7 +102,7 @@ for epoch in range(3000):
             total_node_accuracy += node_accuracy
             total_graph_accuracy += graph_accuracy
 
-        print(model(train_dataset[7]))
+        # print(model(train_dataset[7]))
         print(epoch + 1, epoch_loss, total_node_accuracy / len(train_dataset), total_graph_accuracy / len(train_dataset))
 
 
