@@ -26,6 +26,7 @@ parser.add_argument('--gcn_hidden_size', type=int, default=64)
 # training
 parser.add_argument('--learning_rate', type=float, default=0.01)
 parser.add_argument('--n_epochs', type=int, default=2000)
+parser.add_argument('--changed_node_loss_weight', type=float, default=10)
 
 # misc
 parser.add_argument('--seed', type=int, default=0)
@@ -120,7 +121,7 @@ for epoch in range(args.n_epochs):
                 break
         if changed_node_index != -1:
             extra_loss_fn = torch.nn.MSELoss()
-            loss += extra_loss_fn(out[changed_node_index], data.y[changed_node_index]) * 10
+            loss += extra_loss_fn(out[changed_node_index], data.y[changed_node_index]) * args.changed_node_loss_weight
 
         # out = model(data)  # [N, C], where N = nodes and C = target classes
         #
