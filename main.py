@@ -1,7 +1,9 @@
 import random
+import argparse
 import networkx as nx
 import torch
 from torch_geometric.loader import DataLoader
+import wandb
 
 from models import GCN, RniGCN, UniqueIdGCN, UniqueIdDeepSetsGCN
 from plotting import plot_labeled_graph
@@ -9,7 +11,21 @@ from wl import check_orbits_against_wl, compute_wl_orbits
 from datasets import nx_molecule_dataset, orbit_molecule_dataset, pyg_dataset_from_nx, nx_from_torch_dataset, \
     combined_bioisostere_dataset
 
-log_interval = 10
+
+parser = argparse.ArgumentParser()
+
+# logging options
+parser.add_argument('--log_interval', type=int, default=10)
+
+# model params
+parser.add_argument('--gcn_layers', type=int, default=4)
+parser.add_argument('--gcn_hidden_size', type=int, default=64)
+
+# training
+parser.add_argument('--learning_rate', type=float, default=0.01)
+parser.add_argument('--n_epochs', type=int, default=2000)
+
+args = parser.parse_args()
 
 # G = nx.Graph()
 #
@@ -52,15 +68,20 @@ criterion = torch.nn.CrossEntropyLoss()
 train_dataset = bioisostere_data_list_combined[0:int(len(bioisostere_data_list_combined) * 0.8)]
 test_dataset = bioisostere_data_list_combined[int(len(bioisostere_data_list_combined) * 0.8):]
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-model = GCN(num_node_features=43, num_classes=44, gcn_layers=4).to(device)
+model = GCN(
+    num_node_features=train_dataset[0].x.size()[1],
+    num_classes=train_dataset[0].y.size()[1],
+    gcn_layers=args.gcn_layers,
+    hidden_size=args.gcn_hidden_size,
+).to(device)
 # model = RniGCN(num_node_features=7, num_classes=2, gcn_layers=4, noise_dims=3).to(device)
 # model = UniqueIdDeepSetsGCN(num_node_features=7, num_classes=2, gcn_layers=4).to(device)
-optimizer = torch.optim.Adam(model.parameters(), lr=0.01, weight_decay=5e-4)
+optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate, weight_decay=5e-4)
 
 # train
 print('Training model')
 model.train()
-for epoch in range(3000):
+for epoch in range(args.n_epochs):
     model.training = True
     epoch_loss = 0
     for data in train_dataset:
@@ -68,6 +89,16 @@ for epoch in range(3000):
 
         out = model(data)
         loss = criterion(out, data.y)
+
+        # custom weighting of loss for nodes that change
+        changed_node_index = -1
+        for node, node_feature in enumerate(data.y):
+            if node_feature[-1] != 1:  # final bit != 1 means node changed
+                changed_node_index = node
+                break
+        if changed_node_index != -1:
+            extra_loss_fn = torch.nn.MSELoss()
+            loss += extra_loss_fn(out[changed_node_index], data.y[changed_node_index]) * 10
 
         # out = model(data)  # [N, C], where N = nodes and C = target classes
         #
@@ -85,7 +116,7 @@ for epoch in range(3000):
         optimizer.step()
         epoch_loss += loss
 
-    if (epoch + 1) % log_interval == 0:
+    if (epoch + 1) % args.log_interval == 0:
 
         total_graph_accuracy = 0
         total_node_accuracy = 0
