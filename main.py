@@ -1,6 +1,7 @@
 import random
 import argparse
 import networkx as nx
+import numpy as np
 import torch
 from torch_geometric.loader import DataLoader
 import wandb
@@ -16,6 +17,7 @@ parser = argparse.ArgumentParser()
 
 # logging options
 parser.add_argument('--log_interval', type=int, default=10)
+parser.add_argument('--use_wandb', type=int, default=0)
 
 # model params
 parser.add_argument('--gcn_layers', type=int, default=4)
@@ -25,7 +27,22 @@ parser.add_argument('--gcn_hidden_size', type=int, default=64)
 parser.add_argument('--learning_rate', type=float, default=0.01)
 parser.add_argument('--n_epochs', type=int, default=2000)
 
+# misc
+parser.add_argument('--seed', type=int, default=0)
+
 args = parser.parse_args()
+
+# init logging
+if args.use_wandb:
+    wandb.init(project="orbit-gnn")
+
+
+# fix RNG
+if args.seed == 0:  # sample seed at random
+    args.seed = random.randint(1, 10000)
+torch.manual_seed(args.seed)
+random.seed(args.seed)
+np.random.seed(args.seed)
 
 # G = nx.Graph()
 #
@@ -135,7 +152,13 @@ for epoch in range(args.n_epochs):
 
         # print(model(train_dataset[7]))
         print(epoch + 1, epoch_loss, total_node_accuracy / len(train_dataset), total_graph_accuracy / len(train_dataset))
-
+        if args.use_wandb:
+            wandb.log({
+                'epoch': epoch + 1,
+                'loss': epoch_loss,
+                'node_accuracy': total_node_accuracy / len(train_dataset),
+                'graph_accuracy': total_graph_accuracy / len(train_dataset)
+            })
 
 # TODO: test in a way that makes it not matter which node in the orbit gets the target
 
