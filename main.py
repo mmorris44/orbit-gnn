@@ -29,6 +29,7 @@ parser.add_argument('--n_epochs', type=int, default=2000)
 
 # misc
 parser.add_argument('--seed', type=int, default=0)
+parser.add_argument('--use_cpu', type=int, default=0)
 
 args = parser.parse_args()
 
@@ -45,6 +46,8 @@ np.random.seed(args.seed)
 
 # CUDA
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+if args.use_cpu:
+    device = torch.device('cpu')
 
 # G = nx.Graph()
 #
