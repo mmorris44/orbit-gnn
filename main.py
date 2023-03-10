@@ -36,13 +36,15 @@ args = parser.parse_args()
 if args.use_wandb:
     wandb.init(project="orbit-gnn")
 
-
 # fix RNG
 if args.seed == 0:  # sample seed at random
     args.seed = random.randint(1, 10000)
 torch.manual_seed(args.seed)
 random.seed(args.seed)
 np.random.seed(args.seed)
+
+# CUDA
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 # G = nx.Graph()
 #
@@ -84,7 +86,6 @@ criterion = torch.nn.CrossEntropyLoss()
 # test_dataset = orbit_mutag_dataset[int(len(orbit_mutag_dataset) * 0.8):]
 train_dataset = bioisostere_data_list_combined[0:int(len(bioisostere_data_list_combined) * 0.8)]
 test_dataset = bioisostere_data_list_combined[int(len(bioisostere_data_list_combined) * 0.8):]
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 model = GCN(
     num_node_features=train_dataset[0].x.size()[1],
     num_classes=train_dataset[0].y.size()[1],
@@ -103,6 +104,7 @@ for epoch in range(args.n_epochs):
     epoch_loss = 0
     for data in train_dataset:
         optimizer.zero_grad()
+        data = data.to(device)
 
         out = model(data)
         loss = criterion(out, data.y)
@@ -141,6 +143,7 @@ for epoch in range(args.n_epochs):
         # train accuracy
         model.training = False
         for data in train_dataset:
+            data = data.to(device)
             out = model(data)
             # gets 0.9375 node accuracy if just returning input (out = data.x)
             predictions = torch.argmax(out, dim=1)  # no need to softmax, since it's monotonic
