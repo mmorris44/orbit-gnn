@@ -4,9 +4,10 @@ import networkx as nx
 import numpy as np
 import torch
 from torch_geometric.loader import DataLoader
+from torch_geometric.nn import GAT, GCN
 import wandb
 
-from models import GCN, RniGCN, UniqueIdGCN, UniqueIdDeepSetsGCN
+from models import RniGCN, UniqueIdGCN, UniqueIdDeepSetsGCN
 from plotting import plot_labeled_graph
 from wl import check_orbits_against_wl, compute_wl_orbits
 from datasets import nx_molecule_dataset, orbit_molecule_dataset, pyg_dataset_from_nx, nx_from_torch_dataset, \
@@ -19,12 +20,13 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--log_interval', type=int, default=10)
 parser.add_argument('--use_wandb', type=int, default=0)
 
-# model params
-parser.add_argument('--gcn_layers', type=int, default=4)
-parser.add_argument('--gcn_hidden_size', type=int, default=64)
+# model
+parser.add_argument('--model', type=str, default='gcn', choices=['gcn', 'gat'])
+parser.add_argument('--gnn_layers', type=int, default=4)
+parser.add_argument('--gnn_hidden_size', type=int, default=40)
 
 # training
-parser.add_argument('--learning_rate', type=float, default=0.01)
+parser.add_argument('--learning_rate', type=float, default=0.0001)
 parser.add_argument('--n_epochs', type=int, default=2000)
 parser.add_argument('--changed_node_loss_weight', type=float, default=10)
 
@@ -90,14 +92,32 @@ criterion = torch.nn.CrossEntropyLoss()
 # test_dataset = orbit_mutag_dataset[int(len(orbit_mutag_dataset) * 0.8):]
 train_dataset = bioisostere_data_list_combined[0:int(len(bioisostere_data_list_combined) * 0.8)]
 test_dataset = bioisostere_data_list_combined[int(len(bioisostere_data_list_combined) * 0.8):]
-model = GCN(
-    num_node_features=train_dataset[0].x.size()[1],
-    num_classes=train_dataset[0].y.size()[1],
-    gcn_layers=args.gcn_layers,
-    hidden_size=args.gcn_hidden_size,
-).to(device)
+
+# model = GCN(
+#     num_node_features=train_dataset[0].x.size()[1],
+#     num_classes=train_dataset[0].y.size()[1],
+#     gcn_layers=args.gnn_layers,
+#     hidden_size=args.gnn_hidden_size,
+# ).to(device)
+if args.model == 'gat':
+    model = GAT(
+        in_channels=train_dataset[0].x.size()[1],
+        hidden_channels=args.gnn_hidden_size,
+        num_layers=args.gnn_layers,
+        out_channels=train_dataset[0].y.size()[1],
+    )
+elif args.model == 'gcn':
+    model = GCN(
+        in_channels=train_dataset[0].x.size()[1],
+        hidden_channels=args.gnn_hidden_size,
+        num_layers=args.gnn_layers,
+        out_channels=train_dataset[0].y.size()[1],
+    )
+else:
+    raise Exception('Model "', args.model, '" not recognized')
 # model = RniGCN(num_node_features=7, num_classes=2, gcn_layers=4, noise_dims=3).to(device)
 # model = UniqueIdDeepSetsGCN(num_node_features=7, num_classes=2, gcn_layers=4).to(device)
+
 optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate, weight_decay=5e-4)
 
 # train
@@ -108,9 +128,9 @@ for epoch in range(args.n_epochs):
     epoch_loss = 0
     for data in train_dataset:
         optimizer.zero_grad()
-        data = data.to(device)
+        data = data.to(device)  # TODO: optimize code for GPU
 
-        out = model(data)
+        out = model(data.x, data.edge_index)
         loss = criterion(out, data.y)
 
         # custom weighting of loss for nodes that change
@@ -148,7 +168,7 @@ for epoch in range(args.n_epochs):
         model.training = False
         for data in train_dataset:
             data = data.to(device)
-            out = model(data)
+            out = model(data.x, data.edge_index)
             # gets 0.9375 node accuracy if just returning input (out = data.x)
             predictions = torch.argmax(out, dim=1)  # no need to softmax, since it's monotonic
             ground_truth = torch.argmax(data.y, dim=1)
