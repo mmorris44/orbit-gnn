@@ -89,12 +89,18 @@ def pyg_dataset_from_nx(nx_graphs: List[nx.Graph]) -> List[Data]:
 
 # combine the input and output graphs by adding y-values to the input graphs
 # target graph will differ from input graph by one node (or none)
-def combined_bioisostere_dataset(inputs: List[Data], targets: List[Data], no_change_input_option=True):
+def combined_bioisostere_dataset(
+        inputs: List[Data],
+        targets: List[Data],
+        no_change_input_option=True,
+        only_equivariant=False,
+):
     """Combine bioisostere inputs and targets into one dataset.
 
     :param inputs: source molecules
     :param targets: optimal bioisosteres
     :param no_change_input_option: for each node, add element to vector which when 1 implies no change from input
+    :param only_equivariant: filter out non-equivariant examples from dataset
     :return:
     """
     combined_graphs: List[Data] = []
@@ -110,6 +116,7 @@ def combined_bioisostere_dataset(inputs: List[Data], targets: List[Data], no_cha
 
     for graph_index in range(len(inputs)):
         input_graph, target_graph = nx_inputs[graph_index], nx_targets[graph_index]
+
         # check if already isomorphic
         input_target_same = nx.is_isomorphic(input_graph, target_graph, node_match=node_match_fn)
         if not input_target_same:
@@ -161,12 +168,18 @@ def combined_bioisostere_dataset(inputs: List[Data], targets: List[Data], no_cha
         input_graph_orbits = compute_orbits(input_graph)
 
         # check if task requires symmetry breaking
+        graph_requires_symmetry_breaking = False
         for orbit in input_graph_orbits:
             if swapped_out_node in orbit:  # find the orbit the node is from
                 if len(orbit) > 1 and not input_target_same:
                     # if bioisostere (target diff from input) and orbit bigger than 1
                     num_requiring_symmetry_breaking += 1
+                    graph_requires_symmetry_breaking = True
                 break
+
+        # possibly skip graph that requires symmetry breaking
+        if only_equivariant and graph_requires_symmetry_breaking:
+            continue
 
         # append combined graph
         input_graph_pyg = inputs[graph_index]

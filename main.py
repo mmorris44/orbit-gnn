@@ -25,10 +25,15 @@ parser.add_argument('--model', type=str, default='gcn', choices=['gcn', 'gat'])
 parser.add_argument('--gnn_layers', type=int, default=4)
 parser.add_argument('--gnn_hidden_size', type=int, default=40)
 
+# dataset
+parser.add_argument('--train_on_entire_dataset', type=int, default=1)
+# filter out non-equivariant examples from the bioisostere dataset
+parser.add_argument('--bioisostere_only_equivariant', type=int, default=1)
+
 # training
 parser.add_argument('--learning_rate', type=float, default=0.0001)
 parser.add_argument('--n_epochs', type=int, default=2000)
-parser.add_argument('--changed_node_loss_weight', type=float, default=10)
+parser.add_argument('--changed_node_loss_weight', type=float, default=1)
 
 # misc
 parser.add_argument('--seed', type=int, default=0)
@@ -70,7 +75,8 @@ print('Loading bioisostere dataset')
 bioisostere_data_list_inputs = torch.load('custom-datasets/chembl_bioisostere_dataset_inputs.pt')
 bioisostere_data_list_targets = torch.load('custom-datasets/chembl_bioisostere_dataset_targets.pt')
 bioisostere_data_list_combined = combined_bioisostere_dataset(
-    bioisostere_data_list_inputs, bioisostere_data_list_targets)
+    bioisostere_data_list_inputs, bioisostere_data_list_targets,
+    only_equivariant=args.bioisostere_only_equivariant)
 torch.save(bioisostere_data_list_combined, 'custom-datasets/bioisostere_data_list_combined.pt')
 
 mutag_nx = nx_molecule_dataset('MUTAG')
@@ -91,7 +97,12 @@ criterion = torch.nn.CrossEntropyLoss()
 # train_dataset = orbit_mutag_dataset[0:int(len(orbit_mutag_dataset) * 0.8)]
 # test_dataset = orbit_mutag_dataset[int(len(orbit_mutag_dataset) * 0.8):]
 train_dataset = bioisostere_data_list_combined[0:int(len(bioisostere_data_list_combined) * 0.8)]
+if args.train_on_entire_dataset:
+    train_dataset = bioisostere_data_list_combined
 test_dataset = bioisostere_data_list_combined[int(len(bioisostere_data_list_combined) * 0.8):]
+
+print('Train dataset size:', len(train_dataset))
+print('Test dataset size:', len(test_dataset))
 
 # model = GCN(
 #     num_node_features=train_dataset[0].x.size()[1],
