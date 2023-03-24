@@ -11,8 +11,7 @@ from models import RniGCN, UniqueIdGCN, UniqueIdDeepSetsGCN
 from plotting import plot_labeled_graph
 from wl import check_orbits_against_wl, compute_wl_orbits
 from datasets import nx_molecule_dataset, orbit_molecule_dataset, pyg_dataset_from_nx, nx_from_torch_dataset, \
-    combined_bioisostere_dataset
-
+    combined_bioisostere_dataset, molecule_dataset_orbit_count
 
 parser = argparse.ArgumentParser()
 
@@ -83,6 +82,12 @@ mutag_nx = nx_molecule_dataset('MUTAG')
 # random.shuffle(mutag_nx)  # shuffle dataset
 enzymes_nx = nx_molecule_dataset('ENZYMES')
 proteins_nx = nx_molecule_dataset('PROTEINS')
+
+print('MUTAG orbit size counts:', molecule_dataset_orbit_count(mutag_nx))
+print('ENZYMES orbit size counts:', molecule_dataset_orbit_count(enzymes_nx))
+print('PROTEINS orbit size counts:', molecule_dataset_orbit_count(proteins_nx))
+# TODO (?) : can make multiple graphs with max orbit size n by finding an 2-orbit and adjusting their node values
+# or by appending leaf nodes onto both nodes
 
 orbit_mutag_nx = orbit_molecule_dataset(mutag_nx, num_features=7)
 orbit_mutag_dataset = pyg_dataset_from_nx(orbit_mutag_nx)

@@ -1,5 +1,5 @@
 import copy
-from typing import List
+from typing import List, Dict
 
 import torch
 import torch_geometric.datasets as torch_datasets
@@ -75,8 +75,23 @@ def orbit_molecule_dataset(dataset: List[nx.Graph], num_features: int) -> List[n
         nx.set_node_attributes(orbit_graph, node_attributes)
         orbit_dataset.append(orbit_graph)
 
-    # print('Number of graphs with only trivial orbits:', trivial_orbits_only_count, '//', len(dataset))
+    print('Orbit molecule dataset constructed.')
+    print('Number of graphs with only trivial orbits:', trivial_orbits_only_count, '//', len(dataset))
     return orbit_dataset
+
+
+# For all n, count the number of graphs that contain an orbit of size n
+def molecule_dataset_orbit_count(dataset: List[nx.Graph]) -> Dict[int, int]:
+    orbit_counts = {i: 0 for i in range(1, 100)}
+    for graph_index, graph in enumerate(dataset):
+        _, orbits = compute_wl_orbits(graph)
+        for orbit_size, count in orbit_counts.items():
+            for orbit in orbits:
+                if len(orbit) == orbit_size:
+                    orbit_counts[orbit_size] += 1
+                    break
+    orbit_counts = dict(filter(lambda key_val: key_val[1] > 0, orbit_counts.items()))
+    return orbit_counts
 
 
 # will one-hot encode the attributes
