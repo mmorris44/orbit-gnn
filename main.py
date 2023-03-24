@@ -20,14 +20,14 @@ parser.add_argument('--log_interval', type=int, default=10)
 parser.add_argument('--use_wandb', type=int, default=0)
 
 # model
-parser.add_argument('--model', type=str, default='gcn', choices=['gcn', 'gat'])
+parser.add_argument('--model', type=str, default='gcn', choices=['gcn', 'gat', 'unique_id_gcn'])
 parser.add_argument('--gnn_layers', type=int, default=4)
 parser.add_argument('--gnn_hidden_size', type=int, default=40)
 
 # dataset
 parser.add_argument('--train_on_entire_dataset', type=int, default=1)
 # filter out non-equivariant examples from the bioisostere dataset
-parser.add_argument('--bioisostere_only_equivariant', type=int, default=1)
+parser.add_argument('--bioisostere_only_equivariant', type=int, default=0)
 
 # training
 parser.add_argument('--learning_rate', type=float, default=0.0001)
@@ -86,8 +86,6 @@ proteins_nx = nx_molecule_dataset('PROTEINS')
 print('MUTAG orbit size counts:', molecule_dataset_orbit_count(mutag_nx))
 print('ENZYMES orbit size counts:', molecule_dataset_orbit_count(enzymes_nx))
 print('PROTEINS orbit size counts:', molecule_dataset_orbit_count(proteins_nx))
-# TODO (?) : can make multiple graphs with max orbit size n by finding an 2-orbit and adjusting their node values
-# or by appending leaf nodes onto both nodes
 
 orbit_mutag_nx = orbit_molecule_dataset(mutag_nx, num_features=7)
 orbit_mutag_dataset = pyg_dataset_from_nx(orbit_mutag_nx)
@@ -124,6 +122,13 @@ if args.model == 'gat':
     )
 elif args.model == 'gcn':
     model = GCN(
+        in_channels=train_dataset[0].x.size()[1],
+        hidden_channels=args.gnn_hidden_size,
+        num_layers=args.gnn_layers,
+        out_channels=train_dataset[0].y.size()[1],
+    )
+elif args.model == 'unique_id_gcn':
+    model = UniqueIdGCN(
         in_channels=train_dataset[0].x.size()[1],
         hidden_channels=args.gnn_hidden_size,
         num_layers=args.gnn_layers,

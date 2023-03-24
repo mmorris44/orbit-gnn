@@ -5,9 +5,10 @@ import torch.nn.functional as F
 from torch.nn import ModuleList
 from torch_geometric.nn import GCNConv
 from torchvision.ops import MLP
+from torch_geometric.nn import GCN
 
 
-class GCN(torch.nn.Module):
+class DeprecatedCustomGCN(torch.nn.Module):
     def __init__(self, num_node_features: int, num_classes: int, gcn_layers=2, hidden_size=64):
         super().__init__()
         assert gcn_layers > 0
@@ -34,7 +35,7 @@ class GCN(torch.nn.Module):
             # x = F.dropout(x, training=self.training)
 
 
-class MlpGCN(GCN):
+class MlpGCN(DeprecatedCustomGCN):
     def __init__(self, num_node_features: int, num_classes: int, gcn_layers=2, hidden_size=16,
                  max_graph_size=100, mlp_hidden_size=(16,)):
         super().__init__(num_node_features, num_classes, gcn_layers, hidden_size)
@@ -50,7 +51,7 @@ class MlpGCN(GCN):
         return output
 
 
-class UniqueIdDeepSetsGCN(GCN):
+class UniqueIdDeepSetsGCN(DeprecatedCustomGCN):
     def __init__(self, num_node_features: int, num_classes: int, gcn_layers=2, hidden_size=16,
                  theta_mlp_sizes=(16, 20), rho_mlp_sizes=(16,)):
         super().__init__(num_node_features, num_classes, gcn_layers, hidden_size)
@@ -76,7 +77,8 @@ class UniqueIdDeepSetsGCN(GCN):
             final_outputs[node] = outer_output
         return final_outputs
 
-class RniGCN(GCN):
+
+class RniGCN(DeprecatedCustomGCN):
     def __init__(self, num_node_features: int, num_classes: int, gcn_layers=2, hidden_size=16, noise_dims=2):
         super().__init__(num_node_features + noise_dims, num_classes, gcn_layers, hidden_size)
         self.noise_dims = noise_dims
@@ -91,12 +93,12 @@ class RniGCN(GCN):
 
 # does not use one-hot encodings, since graphs have varying sizes
 class UniqueIdGCN(GCN):
-    def __init__(self, num_node_features: int, num_classes: int, gcn_layers=2, hidden_size=16):
-        super().__init__(num_node_features + 1, num_classes, gcn_layers, hidden_size)
+    def __init__(self, in_channels: int, hidden_channels: int, num_layers: int, out_channels: int):
+        super().__init__(in_channels + 1, hidden_channels, num_layers, out_channels)
 
-    def forward(self, data):
-        # data.x: [batch * num_nodes, num_node_features]
-        ids = torch.unsqueeze(torch.range(1, data.x.size()[0]), dim=1)  # [batch * num_nodes, 1]
-        extended_data = data.clone()
-        extended_data.x = torch.cat((data.x, ids), dim=1)  # [batch * num_nodes, num_node_features + 1]
-        return super().forward(extended_data)
+    def forward(self, x, edge_index, **kwargs):
+        # x: [batch * num_nodes, num_node_features]
+        ids = torch.unsqueeze(torch.range(1, x.size()[0]), dim=1)  # [batch * num_nodes, 1]
+        extended_x = x.clone()
+        extended_x = torch.cat((x, ids), dim=1)  # [batch * num_nodes, num_node_features + 1]
+        return super().forward(extended_x, edge_index)
