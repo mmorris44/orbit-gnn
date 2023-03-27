@@ -28,6 +28,8 @@ parser.add_argument('--gnn_hidden_size', type=int, default=40)
 parser.add_argument('--train_on_entire_dataset', type=int, default=1)
 # filter out non-equivariant examples from the bioisostere dataset
 parser.add_argument('--bioisostere_only_equivariant', type=int, default=0)
+parser.add_argument('--dataset', type=str, default='bioisostere',
+                    choices=['bioisostere', 'mutag', 'alchemy', 'zinc'])
 
 # training
 parser.add_argument('--learning_rate', type=float, default=0.0001)
@@ -70,25 +72,32 @@ if args.use_cpu:
 #     (0, 1), (1, 2), (1, 3), (3, 4), (4, 5), (4, 6)
 # ])
 
-print('Loading bioisostere dataset')
-bioisostere_data_list_inputs = torch.load('custom-datasets/chembl_bioisostere_dataset_inputs.pt')
-bioisostere_data_list_targets = torch.load('custom-datasets/chembl_bioisostere_dataset_targets.pt')
-bioisostere_data_list_combined = combined_bioisostere_dataset(
-    bioisostere_data_list_inputs, bioisostere_data_list_targets,
-    only_equivariant=args.bioisostere_only_equivariant)
-torch.save(bioisostere_data_list_combined, 'custom-datasets/bioisostere_data_list_combined.pt')
+dataset = None
+if args.dataset == 'bioisostere':
+    print('Loading bioisostere dataset')
+    bioisostere_data_list_inputs = torch.load('custom-datasets/chembl_bioisostere_dataset_inputs.pt')
+    bioisostere_data_list_targets = torch.load('custom-datasets/chembl_bioisostere_dataset_targets.pt')
+    bioisostere_data_list_combined = combined_bioisostere_dataset(
+        bioisostere_data_list_inputs, bioisostere_data_list_targets,
+        only_equivariant=args.bioisostere_only_equivariant)
+    torch.save(bioisostere_data_list_combined, 'custom-datasets/bioisostere_data_list_combined.pt')
+    dataset = bioisostere_data_list_combined
+elif args.dataset == 'mutag':
+    mutag_nx = nx_molecule_dataset('MUTAG')
+    print('MUTAG orbit size counts:', molecule_dataset_orbit_count(mutag_nx))
+    # random.shuffle(mutag_nx)  # shuffle dataset
+    orbit_mutag_nx = orbit_molecule_dataset(mutag_nx, num_features=7)
+    orbit_mutag_dataset = pyg_dataset_from_nx(orbit_mutag_nx)
+    dataset = orbit_mutag_dataset
+elif args.dataset == 'alchemy':
+    alchemy_nx = nx_molecule_dataset('alchemy_full')
+    print('alchemy orbit size counts:', molecule_dataset_orbit_count(alchemy_nx))
+elif args.dataset == 'zinc':
+    zinc_nx = nx_molecule_dataset('ZINC_full')
+    print('zinc orbit size counts:', molecule_dataset_orbit_count(zinc_nx))
+else:
+    raise Exception('Dataset "', args.dataset, '" not recognized')
 
-mutag_nx = nx_molecule_dataset('MUTAG')
-# random.shuffle(mutag_nx)  # shuffle dataset
-enzymes_nx = nx_molecule_dataset('ENZYMES')
-proteins_nx = nx_molecule_dataset('PROTEINS')
-
-print('MUTAG orbit size counts:', molecule_dataset_orbit_count(mutag_nx))
-print('ENZYMES orbit size counts:', molecule_dataset_orbit_count(enzymes_nx))
-print('PROTEINS orbit size counts:', molecule_dataset_orbit_count(proteins_nx))
-
-orbit_mutag_nx = orbit_molecule_dataset(mutag_nx, num_features=7)
-orbit_mutag_dataset = pyg_dataset_from_nx(orbit_mutag_nx)
 # pyg_graph = orbit_mutag_dataset[0]
 # print('graph:\n', pyg_graph, '\n\n')
 # print('x:\n', pyg_graph.x, '\n\n')
