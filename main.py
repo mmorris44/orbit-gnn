@@ -20,9 +20,10 @@ parser.add_argument('--log_interval', type=int, default=10)
 parser.add_argument('--use_wandb', type=int, default=0)
 
 # model
-parser.add_argument('--model', type=str, default='gcn', choices=['gcn', 'gat', 'unique_id_gcn'])
+parser.add_argument('--model', type=str, default='rni_gcn', choices=['gcn', 'gat', 'unique_id_gcn', 'rni_gcn'])
 parser.add_argument('--gnn_layers', type=int, default=4)
 parser.add_argument('--gnn_hidden_size', type=int, default=40)
+parser.add_argument('--rni_channels', type=int, default=10)
 
 # dataset
 parser.add_argument('--train_on_entire_dataset', type=int, default=1)
@@ -142,6 +143,14 @@ elif args.model == 'unique_id_gcn':
         hidden_channels=args.gnn_hidden_size,
         num_layers=args.gnn_layers,
         out_channels=train_dataset[0].y.size()[1],
+    )
+elif args.model == 'rni_gcn':
+    model = RniGCN(
+        in_channels=train_dataset[0].x.size()[1],
+        hidden_channels=args.gnn_hidden_size,
+        num_layers=args.gnn_layers,
+        out_channels=train_dataset[0].y.size()[1],
+        rni_channels=args.rni_channels,
     )
 else:
     raise Exception('Model "', args.model, '" not recognized')

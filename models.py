@@ -78,17 +78,16 @@ class UniqueIdDeepSetsGCN(DeprecatedCustomGCN):
         return final_outputs
 
 
-class RniGCN(DeprecatedCustomGCN):
-    def __init__(self, num_node_features: int, num_classes: int, gcn_layers=2, hidden_size=16, noise_dims=2):
-        super().__init__(num_node_features + noise_dims, num_classes, gcn_layers, hidden_size)
-        self.noise_dims = noise_dims
+class RniGCN(GCN):
+    def __init__(self, in_channels: int, hidden_channels: int, num_layers: int, out_channels: int, rni_channels: int):
+        super().__init__(in_channels + rni_channels, hidden_channels, num_layers, out_channels)
+        self.rni_channels = rni_channels
 
-    def forward(self, data):
-        # data.x: [batch * num_nodes, num_node_features]
-        noise = torch.rand(data.x.size()[0], self.noise_dims)  # [batch * num_nodes, noise_dims]
-        extended_data = data.clone()
-        extended_data.x = torch.cat((data.x, noise), dim=1)  # [batch * num_nodes, num_node_features + noise_dims]
-        return super().forward(extended_data)
+    def forward(self, x, edge_index, **kwargs):
+        # x: [batch * num_nodes, in_channels]
+        noise = torch.rand(x.size()[0], self.rni_channels)  # [batch * num_nodes, in_channels]
+        extended_x = torch.cat((x, noise), dim=1)  # [batch * num_nodes, in_channels + rni_channels]
+        return super().forward(extended_x, edge_index)
 
 
 # does not use one-hot encodings, since graphs have varying sizes
@@ -97,8 +96,7 @@ class UniqueIdGCN(GCN):
         super().__init__(in_channels + 1, hidden_channels, num_layers, out_channels)
 
     def forward(self, x, edge_index, **kwargs):
-        # x: [batch * num_nodes, num_node_features]
+        # x: [batch * num_nodes, in_channels]
         ids = torch.unsqueeze(torch.range(1, x.size()[0]), dim=1)  # [batch * num_nodes, 1]
-        extended_x = x.clone()
-        extended_x = torch.cat((x, ids), dim=1)  # [batch * num_nodes, num_node_features + 1]
+        extended_x = torch.cat((x, ids), dim=1)  # [batch * num_nodes, in_channels + 1]
         return super().forward(extended_x, edge_index)
