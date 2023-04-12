@@ -1,5 +1,5 @@
 import copy
-from typing import List, Dict
+from typing import List, Dict, Tuple
 
 import torch
 import torch_geometric.datasets as torch_datasets
@@ -11,12 +11,14 @@ import networkx.algorithms.isomorphism as iso
 
 import plotting
 from graph_theory import compute_orbits
-from wl import compute_wl_orbits
+from wl import compute_wl_orbits, compute_wl_hash
 
 
-def nx_molecule_dataset(name='MUTAG') -> List[nx.Graph]:
+# returns nx dataset and an int representing the number of node classes
+def nx_molecule_dataset(name='MUTAG') -> Tuple[List[nx.Graph], int]:
     torch_dataset = torch_datasets.TUDataset(root='./datasets', name=name)
-    return nx_from_torch_dataset(torch_dataset)
+    num_node_classes = torch_dataset[0].x.size()[1]
+    return nx_from_torch_dataset(torch_dataset), num_node_classes
 
 
 def nx_from_torch_dataset(torch_dataset: List[Data]) -> List[nx.Graph]:
@@ -80,16 +82,42 @@ def orbit_molecule_dataset(dataset: List[nx.Graph], num_features: int) -> List[n
     return orbit_dataset
 
 
+def alchemy_max_orbit_dataset(dataset: List[nx.Graph], num_node_classes: int, max_orbit=2) -> List[nx.Graph]:
+    print('Constructing max orbit alchemy dataset')
+    max_orbit_dataset = []
+
+    # remove duplicate graphs
+    filtered_dataset = []
+    found_wl_hashes = set()
+    for graph in dataset:
+        wl_hash = compute_wl_hash(graph)
+        if wl_hash not in found_wl_hashes:
+            found_wl_hashes.add(wl_hash)
+            filtered_dataset.append(graph)
+
+    print('Orbit counts for unique alchemy graphs:', molecule_dataset_orbit_count(filtered_dataset, 6))
+
+    return max_orbit_dataset
+
+
 # For all n, count the number of graphs that contain an orbit of size n
-def molecule_dataset_orbit_count(dataset: List[nx.Graph]) -> Dict[int, int]:
+# Plot each graph with an orbit of size 'plot_with_size'
+def molecule_dataset_orbit_count(dataset: List[nx.Graph], plot_with_size=0) -> Dict[int, int]:
     orbit_counts = {i: 0 for i in range(1, 100)}
     for graph_index, graph in enumerate(dataset):
         _, orbits = compute_wl_orbits(graph)
+        plot_graph = False
         for orbit_size, count in orbit_counts.items():
             for orbit in orbits:
+                if len(orbit) == plot_with_size:
+                    plot_graph = True
                 if len(orbit) == orbit_size:
                     orbit_counts[orbit_size] += 1
                     break
+        if plot_graph:
+            print('Plotting orbits of graph', graph_index)
+            print(orbits)
+            plotting.plot_labeled_graph(graph, orbits)
     orbit_counts = dict(filter(lambda key_val: key_val[1] > 0, orbit_counts.items()))
     return orbit_counts
 

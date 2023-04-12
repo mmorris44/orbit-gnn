@@ -11,7 +11,7 @@ from models import RniGCN, UniqueIdGCN, UniqueIdDeepSetsGCN
 from plotting import plot_labeled_graph
 from wl import check_orbits_against_wl, compute_wl_orbits
 from datasets import nx_molecule_dataset, orbit_molecule_dataset, pyg_dataset_from_nx, nx_from_torch_dataset, \
-    combined_bioisostere_dataset, molecule_dataset_orbit_count
+    combined_bioisostere_dataset, molecule_dataset_orbit_count, alchemy_max_orbit_dataset
 
 parser = argparse.ArgumentParser()
 
@@ -20,7 +20,7 @@ parser.add_argument('--log_interval', type=int, default=10)
 parser.add_argument('--use_wandb', type=int, default=0)
 
 # model
-parser.add_argument('--model', type=str, default='rni_gcn', choices=['gcn', 'gat', 'unique_id_gcn', 'rni_gcn'])
+parser.add_argument('--model', type=str, default='gcn', choices=['gcn', 'gat', 'unique_id_gcn', 'rni_gcn'])
 parser.add_argument('--gnn_layers', type=int, default=4)
 parser.add_argument('--gnn_hidden_size', type=int, default=40)
 parser.add_argument('--rni_channels', type=int, default=10)
@@ -29,8 +29,10 @@ parser.add_argument('--rni_channels', type=int, default=10)
 parser.add_argument('--train_on_entire_dataset', type=int, default=1)
 # filter out non-equivariant examples from the bioisostere dataset
 parser.add_argument('--bioisostere_only_equivariant', type=int, default=0)
-parser.add_argument('--dataset', type=str, default='bioisostere',
+parser.add_argument('--dataset', type=str, default='alchemy',
                     choices=['bioisostere', 'mutag', 'alchemy', 'zinc'])
+# use with alchemy to create a max_orbit dataset, 0 means don't use max_orbit
+parser.add_argument('--max_orbit', type=int, default=2)
 
 # training
 parser.add_argument('--learning_rate', type=float, default=0.0001)
@@ -84,17 +86,20 @@ if args.dataset == 'bioisostere':
     torch.save(bioisostere_data_list_combined, 'custom-datasets/bioisostere_data_list_combined.pt')
     dataset = bioisostere_data_list_combined
 elif args.dataset == 'mutag':
-    mutag_nx = nx_molecule_dataset('MUTAG')
+    mutag_nx, num_node_classes = nx_molecule_dataset('MUTAG')
     print('MUTAG orbit size counts:', molecule_dataset_orbit_count(mutag_nx))
     # random.shuffle(mutag_nx)  # shuffle dataset
     orbit_mutag_nx = orbit_molecule_dataset(mutag_nx, num_features=7)
     orbit_mutag_dataset = pyg_dataset_from_nx(orbit_mutag_nx)
     dataset = orbit_mutag_dataset
 elif args.dataset == 'alchemy':
-    alchemy_nx = nx_molecule_dataset('alchemy_full')
-    print('alchemy orbit size counts:', molecule_dataset_orbit_count(alchemy_nx))
+    alchemy_nx, num_node_classes = nx_molecule_dataset('alchemy_full')
+    if args.max_orbit >= 2:
+        orbit_alchemy_nx = alchemy_max_orbit_dataset(alchemy_nx, num_node_classes, args.max_orbit)
+    else:
+        raise Exception('Alchemy currently only supported with args.max_orbit >= 2')
 elif args.dataset == 'zinc':
-    zinc_nx = nx_molecule_dataset('ZINC_full')
+    zinc_nx, num_node_classes = nx_molecule_dataset('ZINC_full')
     print('zinc orbit size counts:', molecule_dataset_orbit_count(zinc_nx))
 else:
     raise Exception('Dataset "', args.dataset, '" not recognized')

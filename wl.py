@@ -11,7 +11,7 @@ def multi_set_hash_function(input_set: list) -> int:
     return hash(tuple(sorted(input_set)))
 
 
-def orbit_wl(graph: nx.Graph) -> Tuple[int, List[int]]:
+def wl(graph: nx.Graph) -> Tuple[int, List[int]]:
     labels = [-1] * len(graph)
     node_attributes = nx.get_node_attributes(graph, 'x')
     if node_attributes:
@@ -40,8 +40,13 @@ def orbit_wl(graph: nx.Graph) -> Tuple[int, List[int]]:
     raise Exception('WL did not converge: something is wrong with the algorithm')
 
 
+def compute_wl_hash(graph: nx.Graph) -> int:
+    _, final_labels = wl(graph)
+    return multi_set_hash_function(final_labels)
+
+
 def compute_wl_orbits(graph: nx.Graph) -> Tuple[int, List[List[int]]]:
-    n_iterations, final_labels = orbit_wl(graph)
+    n_iterations, final_labels = wl(graph)
     node_list = list(graph.nodes)[1:]
     orbits = [[list(graph.nodes)[0]]]
 
