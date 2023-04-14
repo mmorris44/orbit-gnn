@@ -98,7 +98,7 @@ elif args.dataset == 'alchemy':
         orbit_alchemy_nx = alchemy_max_orbit_dataset(
             dataset=alchemy_nx,
             num_node_classes=num_node_classes,
-            extend_dataset=True,  # TODO: make arg
+            extended_dataset_size=1000,  # TODO: make arg
             max_orbit=args.max_orbit
         )
     else:

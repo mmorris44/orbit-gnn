@@ -1,5 +1,5 @@
 import copy
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Iterable
 
 import torch
 import torch_geometric.datasets as torch_datasets
@@ -82,13 +82,58 @@ def orbit_molecule_dataset(dataset: List[nx.Graph], num_features: int) -> List[n
     return orbit_dataset
 
 
+def max_orbit_node_append_extended_graphs(
+        graph: nx.Graph,
+        num_node_classes: int,
+        orbits: List[List[int]],
+) -> Iterable[nx.Graph]:
+    # append nodes attached to nodes from orbits, from the smallest orbits to largest
+    orbits_sorted = orbits[:]
+    orbits_sorted.sort(key=len, reverse=False)
+
+    for orbit in orbits_sorted:  # each orbit
+        for node_feature in range(num_node_classes):  # each possible node feature
+            new_graph = copy.deepcopy(graph)
+            for orbit_node_index in range(len(orbit)):  # each node in the orbit
+                new_node_id = len(graph) + orbit_node_index  # give new node a new ID
+                new_graph.add_node(new_node_id, x=node_feature)  # set the node feature
+                new_graph.add_edge(orbit[orbit_node_index], new_node_id)  # attach it to a node from the orbit
+            yield new_graph
+
+
+def max_orbit_feature_extended_graphs(
+        graph: nx.Graph,
+        num_node_classes: int,
+        orbits: List[List[int]],
+) -> Iterable[nx.Graph]:
+    # adjust node features of orbits, from the largest orbits to smallest
+    orbits_sorted = orbits[:]
+    orbits_sorted.sort(key=len, reverse=True)
+
+    for orbit in orbits_sorted:  # each orbit
+        for node_feature in range(num_node_classes):  # each possible node feature
+            current_node_attributes = nx.get_node_attributes(graph, 'x')
+            for node in orbit:  # set features of nodes in the orbit
+                current_node_attributes[node] = node_feature
+
+            # set node features and yield new graph
+            node_attributes = {node: {'x': current_node_attributes[node]} for node in graph.nodes}
+            new_graph = copy.deepcopy(graph)
+            nx.set_node_attributes(new_graph, node_attributes)
+            yield new_graph
+
+
 def alchemy_max_orbit_dataset(
         dataset: List[nx.Graph],
         num_node_classes: int,
-        extend_dataset: bool,
+        extended_dataset_size: int,
         max_orbit=2
 ) -> List[nx.Graph]:
-    print('Constructing max orbit dataset from alchemy:', len(dataset))
+    print('Constructing max orbit dataset from alchemy:', len(dataset), '->', extended_dataset_size)
+
+    if max_orbit > num_node_classes:
+        # alchemy has 6 node classes
+        raise Exception('Impossible to create a max_orbit dataset with max_orbit > num_node_classes')
 
     # remove duplicate graphs
     unique_dataset = []
@@ -121,12 +166,43 @@ def alchemy_max_orbit_dataset(
     # new graphs must still have an orbit of size at least max_orbit
     # new graphs must have a unique wl hash
     extended_dataset = filtered_dataset[:]
-    if extend_dataset:
-        to_add = []
 
-        # 
+    # contains generators, graph_generators[i] is a generator of graphs created from filtered_dataset[i]
+    graph_generators = []
+    generator_mode = 1  # 0 = feature extension, 1 = node append extension (flops between them)
 
-        for graph in to_add:
+    add_new_graphs = len(extended_dataset) < extended_dataset_size
+
+    # trim dataset if it is too large
+    if not add_new_graphs:
+        print('Dataset too large, trimming down to', extended_dataset_size, 'from', len(extended_dataset))
+        extended_dataset = extended_dataset[:extended_dataset_size]
+    else:
+        print('Extending dataset using graph generators from', len(extended_dataset), 'to', extended_dataset_size)
+
+    # add new graphs to dataset, up to extended_dataset_size
+    while add_new_graphs:
+        # all generators exhausted, create new generators
+        if len(graph_generators) == 0:
+            generator_mode = (generator_mode + 1) % 2
+            print('Exhausted all graph generators, creating new generators with mode', generator_mode)
+            if generator_mode == 0:
+                for graph, orbits in extended_dataset:
+                    graph_generators.append(max_orbit_feature_extended_graphs(graph, num_node_classes, orbits))
+            elif generator_mode == 1:
+                for graph, orbits in extended_dataset:
+                    graph_generators.append(max_orbit_node_append_extended_graphs(graph, num_node_classes, orbits))
+            else:
+                raise Exception('Non-allowed generator mode', generator_mode)
+
+        # generate a graph from each generator
+        for graph_generator in graph_generators:
+            graph = next(graph_generator, None)
+            # iterator has exhausted itself, remove it
+            if graph is None:
+                graph_generators.remove(graph_generator)
+                continue
+
             # new graphs must still have an orbit of size at least max_orbit
             _, orbits = compute_wl_orbits(graph)
             has_max_orbit = False
@@ -139,8 +215,14 @@ def alchemy_max_orbit_dataset(
             wl_hash = compute_wl_hash(graph)
             if has_max_orbit and wl_hash not in found_wl_hashes:
                 found_wl_hashes.add(wl_hash)
-                extended_dataset.append(graph)
-    print('Extended dataset, size is now:', len(extended_dataset))
+                extended_dataset.append((graph, orbits))
+
+                # check if reached target dataset size
+                if len(extended_dataset) >= extended_dataset_size:
+                    add_new_graphs = False
+                    break
+
+    print('Dataset resized, size is now:', len(extended_dataset))
 
     # set max_orbit targets for largest orbits
     assert False
