@@ -32,7 +32,7 @@ parser.add_argument('--bioisostere_only_equivariant', type=int, default=0)
 parser.add_argument('--dataset', type=str, default='alchemy',
                     choices=['bioisostere', 'mutag', 'alchemy', 'zinc'])
 # use with alchemy to create a max_orbit dataset, 0 means don't use max_orbit
-parser.add_argument('--max_orbit', type=int, default=2)
+parser.add_argument('--max_orbit', type=int, default=6)
 
 # training
 parser.add_argument('--learning_rate', type=float, default=0.0001)
@@ -95,12 +95,18 @@ elif args.dataset == 'mutag':
 elif args.dataset == 'alchemy':
     alchemy_nx, num_node_classes = nx_molecule_dataset('alchemy_full')
     if args.max_orbit >= 2:
-        orbit_alchemy_nx = alchemy_max_orbit_dataset(alchemy_nx, num_node_classes, args.max_orbit)
+        orbit_alchemy_nx = alchemy_max_orbit_dataset(
+            dataset=alchemy_nx,
+            num_node_classes=num_node_classes,
+            extend_dataset=True,  # TODO: make arg
+            max_orbit=args.max_orbit
+        )
     else:
         raise Exception('Alchemy currently only supported with args.max_orbit >= 2')
 elif args.dataset == 'zinc':
     zinc_nx, num_node_classes = nx_molecule_dataset('ZINC_full')
     print('zinc orbit size counts:', molecule_dataset_orbit_count(zinc_nx))
+    raise Exception('Zinc currently not supported for training')
 else:
     raise Exception('Dataset "', args.dataset, '" not recognized')
 
@@ -114,10 +120,10 @@ else:
 criterion = torch.nn.CrossEntropyLoss()
 # train_dataset = orbit_mutag_dataset[0:int(len(orbit_mutag_dataset) * 0.8)]
 # test_dataset = orbit_mutag_dataset[int(len(orbit_mutag_dataset) * 0.8):]
-train_dataset = bioisostere_data_list_combined[0:int(len(bioisostere_data_list_combined) * 0.8)]
+train_dataset = dataset[0:int(len(dataset) * 0.8)]
 if args.train_on_entire_dataset:
-    train_dataset = bioisostere_data_list_combined
-test_dataset = bioisostere_data_list_combined[int(len(bioisostere_data_list_combined) * 0.8):]
+    train_dataset = dataset
+test_dataset = dataset[int(len(dataset) * 0.8):]
 
 print('Train dataset size:', len(train_dataset))
 print('Test dataset size:', len(test_dataset))

@@ -82,22 +82,70 @@ def orbit_molecule_dataset(dataset: List[nx.Graph], num_features: int) -> List[n
     return orbit_dataset
 
 
-def alchemy_max_orbit_dataset(dataset: List[nx.Graph], num_node_classes: int, max_orbit=2) -> List[nx.Graph]:
-    print('Constructing max orbit alchemy dataset')
-    max_orbit_dataset = []
+def alchemy_max_orbit_dataset(
+        dataset: List[nx.Graph],
+        num_node_classes: int,
+        extend_dataset: bool,
+        max_orbit=2
+) -> List[nx.Graph]:
+    print('Constructing max orbit dataset from alchemy:', len(dataset))
 
     # remove duplicate graphs
-    filtered_dataset = []
+    unique_dataset = []
     found_wl_hashes = set()
     for graph in dataset:
         wl_hash = compute_wl_hash(graph)
         if wl_hash not in found_wl_hashes:
             found_wl_hashes.add(wl_hash)
-            filtered_dataset.append(graph)
+            unique_dataset.append(graph)
+    print('Duplicates removed, size is now:', len(unique_dataset))
 
-    print('Orbit counts for unique alchemy graphs:', molecule_dataset_orbit_count(filtered_dataset, 6))
+    # remove graphs without an orbit of size at least max_orbit
+    filtered_dataset = []  # contains pairs (graph, orbits)
+    found_wl_hashes = set()  # track new smaller list of wl hashes
+    for graph in unique_dataset:
+        _, orbits = compute_wl_orbits(graph)
+        has_max_orbit = False
+        for orbit in orbits:
+            if len(orbit) >= max_orbit:
+                has_max_orbit = True
+                break
+        if has_max_orbit:
+            filtered_dataset.append((graph, orbits))
+            wl_hash = compute_wl_hash(graph)
+            found_wl_hashes.add(wl_hash)
+    print('Filtered to only include graphs with an orbit of size at least', max_orbit)
+    print('Size is now:', len(filtered_dataset))
 
-    return max_orbit_dataset
+    # extend dataset
+    # new graphs must still have an orbit of size at least max_orbit
+    # new graphs must have a unique wl hash
+    extended_dataset = filtered_dataset[:]
+    if extend_dataset:
+        to_add = []
+
+        # 
+
+        for graph in to_add:
+            # new graphs must still have an orbit of size at least max_orbit
+            _, orbits = compute_wl_orbits(graph)
+            has_max_orbit = False
+            for orbit in orbits:
+                if len(orbit) >= max_orbit:
+                    has_max_orbit = True
+                    break
+
+            # new graphs must have a unique wl hash
+            wl_hash = compute_wl_hash(graph)
+            if has_max_orbit and wl_hash not in found_wl_hashes:
+                found_wl_hashes.add(wl_hash)
+                extended_dataset.append(graph)
+    print('Extended dataset, size is now:', len(extended_dataset))
+
+    # set max_orbit targets for largest orbits
+    assert False
+
+    return extended_dataset
 
 
 # For all n, count the number of graphs that contain an orbit of size n
