@@ -135,7 +135,7 @@ def alchemy_max_orbit_dataset(
         # alchemy has 6 node classes
         raise Exception('Impossible to create a max_orbit dataset with max_orbit > num_node_classes')
 
-    # remove duplicate graphs
+    # STEP 1: remove duplicate graphs
     unique_dataset = []
     found_wl_hashes = set()
     for graph in dataset:
@@ -145,7 +145,7 @@ def alchemy_max_orbit_dataset(
             unique_dataset.append(graph)
     print('Duplicates removed, size is now:', len(unique_dataset))
 
-    # remove graphs without an orbit of size at least max_orbit
+    # STEP 2: remove graphs without an orbit of size at least max_orbit
     filtered_dataset = []  # contains pairs (graph, orbits)
     found_wl_hashes = set()  # track new smaller list of wl hashes
     for graph in unique_dataset:
@@ -162,7 +162,7 @@ def alchemy_max_orbit_dataset(
     print('Filtered to only include graphs with an orbit of size at least', max_orbit)
     print('Size is now:', len(filtered_dataset))
 
-    # extend dataset
+    # STEP 3: extend dataset (or simply shrink if it is too large)
     # new graphs must still have an orbit of size at least max_orbit
     # new graphs must have a unique wl hash
     extended_dataset = filtered_dataset[:]
@@ -224,8 +224,50 @@ def alchemy_max_orbit_dataset(
 
     print('Dataset resized, size is now:', len(extended_dataset))
 
-    # set max_orbit targets for largest orbits
-    assert False
+    # STEP 4: set max_orbit targets for largest orbits
+    for graph, orbits in extended_dataset:
+
+        # one-hot encode the node attributes
+        current_node_attributes = nx.get_node_attributes(graph, 'x')
+        for node, attribute in current_node_attributes.items():
+            one_hot_encoding = [0.0] * num_node_classes
+            one_hot_encoding[attribute] = 1.0
+            current_node_attributes[node] = tuple(one_hot_encoding)
+
+        # collect the largest orbit(s)
+        largest_orbits = []
+        largest_orbit_len = len(max(orbits, key=len))
+        largest_orbits = [orbit for orbit in orbits if len(orbit) == largest_orbit_len]
+
+        # set the target node attributes
+        # nodes target to 0 by default
+        target_node_attributes = {node: 0 for node in graph.nodes}
+
+        # each node in the largest orbit will target a unique output i, up to max_orbit unique values
+        for orbit in largest_orbits:
+            for i in range(1, max_orbit):  # already one unique value (0)
+                node = orbit[i]
+                target = i
+                target_node_attributes[node] = target
+
+        # one-hot encode the node targets
+        for node, attribute in target_node_attributes.items():
+            one_hot_encoding = [0.0] * num_node_classes
+            one_hot_encoding[attribute] = 1.0
+            target_node_attributes[node] = tuple(one_hot_encoding)
+
+        # set all the node attributes
+        node_attributes = {node: {'x': current_node_attributes[node], 'y': target_node_attributes[node]}
+                           for node in graph.nodes}
+        nx.set_node_attributes(graph, node_attributes)
+
+    print('Target set, all features one-hot encoded')
+
+    # visualize graphs for debugging
+    # for graph, orbits in extended_dataset:
+    #     print('x', nx.get_node_attributes(graph, 'x'))
+    #     print('y', nx.get_node_attributes(graph, 'y'))
+    #     plotting.plot_labeled_graph(graph, orbits)
 
     return extended_dataset
 
