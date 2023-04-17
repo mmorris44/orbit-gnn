@@ -128,7 +128,7 @@ def alchemy_max_orbit_dataset(
         num_node_classes: int,
         extended_dataset_size: int,
         max_orbit=2
-) -> List[nx.Graph]:
+) -> List[Tuple[nx.Graph, List[List[int]]]]:  # returns (graph, orbits) pairs
     print('Constructing max orbit dataset from alchemy:', len(dataset), '->', extended_dataset_size)
 
     if max_orbit > num_node_classes:

@@ -29,7 +29,7 @@ parser.add_argument('--rni_channels', type=int, default=10)
 parser.add_argument('--train_on_entire_dataset', type=int, default=1)
 # filter out non-equivariant examples from the bioisostere dataset
 parser.add_argument('--bioisostere_only_equivariant', type=int, default=0)
-parser.add_argument('--dataset', type=str, default='alchemy',
+parser.add_argument('--dataset', type=str, default='bioisostere',
                     choices=['bioisostere', 'mutag', 'alchemy', 'zinc'])
 # use with alchemy to create a max_orbit dataset, 0 means don't use max_orbit
 parser.add_argument('--max_orbit', type=int, default=6)
@@ -57,9 +57,9 @@ random.seed(args.seed)
 np.random.seed(args.seed)
 
 # CUDA
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+device = 'cuda' if torch.cuda.is_available() else 'cpu'
 if args.use_cpu:
-    device = torch.device('cpu')
+    device = 'cpu'
 
 # G = nx.Graph()
 #
