@@ -127,7 +127,8 @@ def alchemy_max_orbit_dataset(
         dataset: List[nx.Graph],
         num_node_classes: int,
         extended_dataset_size: int,
-        max_orbit=2
+        max_orbit=2,
+        one_hot_targets=False,
 ) -> List[Tuple[nx.Graph, List[List[int]]]]:  # returns (graph, orbits) pairs
     print('Constructing max orbit dataset from alchemy:', len(dataset), '->', extended_dataset_size)
 
@@ -251,10 +252,11 @@ def alchemy_max_orbit_dataset(
                 target_node_attributes[node] = target
 
         # one-hot encode the node targets
-        for node, attribute in target_node_attributes.items():
-            one_hot_encoding = [0.0] * num_node_classes
-            one_hot_encoding[attribute] = 1.0
-            target_node_attributes[node] = tuple(one_hot_encoding)
+        if one_hot_targets:
+            for node, attribute in target_node_attributes.items():
+                one_hot_encoding = [0.0] * num_node_classes
+                one_hot_encoding[attribute] = 1.0
+                target_node_attributes[node] = tuple(one_hot_encoding)
 
         # set all the node attributes
         node_attributes = {node: {'x': current_node_attributes[node], 'y': target_node_attributes[node]}
