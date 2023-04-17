@@ -97,6 +97,6 @@ class UniqueIdGCN(GCN):
 
     def forward(self, x, edge_index, **kwargs):
         # x: [batch * num_nodes, in_channels]
-        ids = torch.unsqueeze(torch.range(1, x.size()[0]), dim=1)  # [batch * num_nodes, 1]
+        ids = torch.unsqueeze(torch.arange(1, x.size()[0] + 1), dim=1)  # [batch * num_nodes, 1]
         extended_x = torch.cat((x, ids), dim=1)  # [batch * num_nodes, in_channels + 1]
         return super().forward(extended_x, edge_index)

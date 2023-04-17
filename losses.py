@@ -6,6 +6,17 @@ from torch.nn.modules.loss import _WeightedLoss
 from torch.nn import functional as F
 
 
+class CrossEntropyLossWrapper(_WeightedLoss):
+    def __init__(self, weight: Optional[Tensor] = None, size_average=None, ignore_index: int = -100,
+                 reduce=None, reduction: str = 'mean', label_smoothing: float = 0.0) -> None:
+        super().__init__(weight, size_average, reduce, reduction)
+        self.cross_entropy_loss\
+            = torch.nn.CrossEntropyLoss(weight, size_average, ignore_index, reduce, reduction, label_smoothing)
+
+    def forward(self, input: Tensor, target: Tensor, non_equivariant_orbits: List[Tensor]) -> Tensor:
+        return self.cross_entropy_loss(input, target)
+
+
 class OrbitSortingCrossEntropyLoss(_WeightedLoss):
     __constants__ = ['ignore_index', 'reduction', 'label_smoothing']
     ignore_index: int

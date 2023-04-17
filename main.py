@@ -7,6 +7,7 @@ from torch_geometric.loader import DataLoader
 from torch_geometric.nn import GAT, GCN
 import wandb
 
+from losses import OrbitSortingCrossEntropyLoss, CrossEntropyLossWrapper
 from models import RniGCN, UniqueIdGCN, UniqueIdDeepSetsGCN
 from plotting import plot_labeled_graph
 from wl import check_orbits_against_wl, compute_wl_orbits
@@ -38,6 +39,8 @@ parser.add_argument('--max_orbit', type=int, default=6)
 parser.add_argument('--learning_rate', type=float, default=0.0001)
 parser.add_argument('--n_epochs', type=int, default=2000)
 parser.add_argument('--changed_node_loss_weight', type=float, default=1)
+parser.add_argument('--loss', type=str, default='orbit_sorting_cross_entropy',
+                    choices=['cross_entropy', 'orbit_sorting_cross_entropy'])
 
 # misc
 parser.add_argument('--seed', type=int, default=0)
@@ -112,17 +115,15 @@ elif args.dataset == 'zinc':
 else:
     raise Exception('Dataset "', args.dataset, '" not recognized')
 
-# pyg_graph = orbit_mutag_dataset[0]
-# print('graph:\n', pyg_graph, '\n\n')
-# print('x:\n', pyg_graph.x, '\n\n')
-# print('y:\n', pyg_graph.y, '\n\n')
-# print('edge index:\n', pyg_graph.edge_index, '\n\n')
+# set up loss
+if args.loss == 'cross_entropy':
+    criterion = CrossEntropyLossWrapper()
+elif args.loss == 'orbit_sorting_cross_entropy':
+    criterion = OrbitSortingCrossEntropyLoss()
+else:
+    raise Exception('Loss "', args.loss, '" not recognized')
 
-# set up model
-criterion = torch.nn.CrossEntropyLoss()
-
-# train_dataset = orbit_mutag_dataset[0:int(len(orbit_mutag_dataset) * 0.8)]
-# test_dataset = orbit_mutag_dataset[int(len(orbit_mutag_dataset) * 0.8):]
+# set up dataset
 train_dataset = dataset[0:int(len(dataset) * 0.8)]
 if args.train_on_entire_dataset:
     train_dataset = dataset
@@ -131,6 +132,7 @@ test_dataset = dataset[int(len(dataset) * 0.8):]
 print('Train dataset size:', len(train_dataset))
 print('Test dataset size:', len(test_dataset))
 
+# set up model
 in_channels = train_dataset[0].x.size()[1]
 out_channels = in_channels
 if args.model == 'gat':
@@ -180,7 +182,7 @@ for epoch in range(args.n_epochs):
         data = data.to(device)  # TODO: optimize code for GPU
 
         out = model(data.x, data.edge_index)
-        loss = criterion(out, data.y)
+        loss = criterion(out, data.y, data.non_equivariant_orbits)
 
         # # custom weighting of loss for nodes that change
         # changed_node_index = -1
