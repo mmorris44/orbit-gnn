@@ -20,7 +20,7 @@ parser.add_argument('--log_interval', type=int, default=10)
 parser.add_argument('--use_wandb', type=int, default=0)
 
 # model
-parser.add_argument('--model', type=str, default='gcn', choices=['gcn', 'gat', 'unique_id_gcn', 'rni_gcn'])
+parser.add_argument('--model', type=str, default='unique_id_gcn', choices=['gcn', 'gat', 'unique_id_gcn', 'rni_gcn'])
 parser.add_argument('--gnn_layers', type=int, default=4)
 parser.add_argument('--gnn_hidden_size', type=int, default=40)
 parser.add_argument('--rni_channels', type=int, default=10)
@@ -103,8 +103,6 @@ elif args.dataset == 'alchemy':
         )
         orbit_alchemy_pyg = pyg_max_orbit_dataset_from_nx(orbit_alchemy_nx)
         dataset = orbit_alchemy_pyg
-        print(orbit_alchemy_pyg[0])
-        assert False
     else:
         raise Exception('Alchemy currently only supported with args.max_orbit >= 2')
 elif args.dataset == 'zinc':
@@ -122,6 +120,7 @@ else:
 
 # set up model
 criterion = torch.nn.CrossEntropyLoss()
+
 # train_dataset = orbit_mutag_dataset[0:int(len(orbit_mutag_dataset) * 0.8)]
 # test_dataset = orbit_mutag_dataset[int(len(orbit_mutag_dataset) * 0.8):]
 train_dataset = dataset[0:int(len(dataset) * 0.8)]
@@ -132,39 +131,35 @@ test_dataset = dataset[int(len(dataset) * 0.8):]
 print('Train dataset size:', len(train_dataset))
 print('Test dataset size:', len(test_dataset))
 
-# model = GCN(
-#     num_node_features=train_dataset[0].x.size()[1],
-#     num_classes=train_dataset[0].y.size()[1],
-#     gcn_layers=args.gnn_layers,
-#     hidden_size=args.gnn_hidden_size,
-# ).to(device)
+in_channels = train_dataset[0].x.size()[1]
+out_channels = in_channels
 if args.model == 'gat':
     model = GAT(
-        in_channels=train_dataset[0].x.size()[1],
+        in_channels=in_channels,
         hidden_channels=args.gnn_hidden_size,
         num_layers=args.gnn_layers,
-        out_channels=train_dataset[0].y.size()[1],
+        out_channels=out_channels,
     )
 elif args.model == 'gcn':
     model = GCN(
-        in_channels=train_dataset[0].x.size()[1],
+        in_channels=in_channels,
         hidden_channels=args.gnn_hidden_size,
         num_layers=args.gnn_layers,
-        out_channels=train_dataset[0].y.size()[1],
+        out_channels=out_channels,
     )
 elif args.model == 'unique_id_gcn':
     model = UniqueIdGCN(
-        in_channels=train_dataset[0].x.size()[1],
+        in_channels=in_channels,
         hidden_channels=args.gnn_hidden_size,
         num_layers=args.gnn_layers,
-        out_channels=train_dataset[0].y.size()[1],
+        out_channels=out_channels
     )
 elif args.model == 'rni_gcn':
     model = RniGCN(
-        in_channels=train_dataset[0].x.size()[1],
+        in_channels=in_channels,
         hidden_channels=args.gnn_hidden_size,
         num_layers=args.gnn_layers,
-        out_channels=train_dataset[0].y.size()[1],
+        out_channels=out_channels,
         rni_channels=args.rni_channels,
     )
 else:
@@ -187,15 +182,15 @@ for epoch in range(args.n_epochs):
         out = model(data.x, data.edge_index)
         loss = criterion(out, data.y)
 
-        # custom weighting of loss for nodes that change
-        changed_node_index = -1
-        for node, node_feature in enumerate(data.y):
-            if node_feature[-1] != 1:  # final bit != 1 means node changed
-                changed_node_index = node
-                break
-        if changed_node_index != -1:
-            extra_loss_fn = torch.nn.MSELoss()
-            loss += extra_loss_fn(out[changed_node_index], data.y[changed_node_index]) * args.changed_node_loss_weight
+        # # custom weighting of loss for nodes that change
+        # changed_node_index = -1
+        # for node, node_feature in enumerate(data.y):
+        #     if node_feature[-1] != 1:  # final bit != 1 means node changed
+        #         changed_node_index = node
+        #         break
+        # if changed_node_index != -1:
+        #     extra_loss_fn = torch.nn.MSELoss()
+        #     loss += extra_loss_fn(out[changed_node_index], data.y[changed_node_index]) * args.changed_node_loss_weight
 
         # out = model(data)  # [N, C], where N = nodes and C = target classes
         #
@@ -225,7 +220,7 @@ for epoch in range(args.n_epochs):
             out = model(data.x, data.edge_index)
             # gets 0.9375 node accuracy if just returning input (out = data.x)
             predictions = torch.argmax(out, dim=1)  # no need to softmax, since it's monotonic
-            ground_truth = torch.argmax(data.y, dim=1)
+            ground_truth = data.y  # assume class labels are given in data.y
             node_accuracy = torch.sum(predictions == ground_truth) / predictions.size()[0]
             graph_accuracy = 0 if node_accuracy < 0.99 else 1
             total_node_accuracy += node_accuracy
@@ -242,6 +237,7 @@ for epoch in range(args.n_epochs):
             })
 
 # TODO: test in a way that makes it not matter which node in the orbit gets the target
+# (just compare the set intersections for each orbit)
 
 # print('\n--- MUTAG orbits ---')
 # check_orbits_against_wl(mutag_nx)
