@@ -11,7 +11,7 @@ from models import RniGCN, UniqueIdGCN, UniqueIdDeepSetsGCN
 from plotting import plot_labeled_graph
 from wl import check_orbits_against_wl, compute_wl_orbits
 from datasets import nx_molecule_dataset, orbit_molecule_dataset, pyg_dataset_from_nx, nx_from_torch_dataset, \
-    combined_bioisostere_dataset, molecule_dataset_orbit_count, alchemy_max_orbit_dataset
+    combined_bioisostere_dataset, molecule_dataset_orbit_count, alchemy_max_orbit_dataset, pyg_max_orbit_dataset_from_nx
 
 parser = argparse.ArgumentParser()
 
@@ -29,7 +29,7 @@ parser.add_argument('--rni_channels', type=int, default=10)
 parser.add_argument('--train_on_entire_dataset', type=int, default=1)
 # filter out non-equivariant examples from the bioisostere dataset
 parser.add_argument('--bioisostere_only_equivariant', type=int, default=0)
-parser.add_argument('--dataset', type=str, default='bioisostere',
+parser.add_argument('--dataset', type=str, default='alchemy',
                     choices=['bioisostere', 'mutag', 'alchemy', 'zinc'])
 # use with alchemy to create a max_orbit dataset, 0 means don't use max_orbit
 parser.add_argument('--max_orbit', type=int, default=6)
@@ -101,6 +101,10 @@ elif args.dataset == 'alchemy':
             extended_dataset_size=1000,  # TODO: make arg
             max_orbit=args.max_orbit
         )
+        orbit_alchemy_pyg = pyg_max_orbit_dataset_from_nx(orbit_alchemy_nx)
+        dataset = orbit_alchemy_pyg
+        print(orbit_alchemy_pyg[0])
+        assert False
     else:
         raise Exception('Alchemy currently only supported with args.max_orbit >= 2')
 elif args.dataset == 'zinc':

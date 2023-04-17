@@ -129,7 +129,8 @@ def alchemy_max_orbit_dataset(
         extended_dataset_size: int,
         max_orbit=2,
         one_hot_targets=False,
-) -> List[Tuple[nx.Graph, List[List[int]]]]:  # returns (graph, orbits) pairs
+) -> List[Tuple[nx.Graph, List[List[int]], List[List[int]]]]:
+    # returns a list of (graph, orbits, non-equivariant orbits) tuples
     print('Constructing max orbit dataset from alchemy:', len(dataset), '->', extended_dataset_size)
 
     if max_orbit > num_node_classes:
@@ -226,7 +227,7 @@ def alchemy_max_orbit_dataset(
     print('Dataset resized, size is now:', len(extended_dataset))
 
     # STEP 4: set max_orbit targets for largest orbits
-    for graph, orbits in extended_dataset:
+    for graph_index, (graph, orbits) in enumerate(extended_dataset):
 
         # one-hot encode the node attributes
         current_node_attributes = nx.get_node_attributes(graph, 'x')
@@ -263,15 +264,28 @@ def alchemy_max_orbit_dataset(
                            for node in graph.nodes}
         nx.set_node_attributes(graph, node_attributes)
 
+        # add the non-equivariant orbits to the tuple (the largest ones)
+        extended_dataset[graph_index] = (graph, orbits, largest_orbits)
+
     print('Target set, all features one-hot encoded')
 
     # visualize graphs for debugging
-    # for graph, orbits in extended_dataset:
+    # for graph, orbits, largest_orbits in extended_dataset:
     #     print('x', nx.get_node_attributes(graph, 'x'))
     #     print('y', nx.get_node_attributes(graph, 'y'))
     #     plotting.plot_labeled_graph(graph, orbits)
 
     return extended_dataset
+
+
+def pyg_max_orbit_dataset_from_nx(nx_data: List[Tuple[nx.Graph, List[List[int]], List[List[int]]]]) -> List[Data]:
+    pyg_list = []
+    for graph, orbits, non_equivariant_orbits in nx_data:
+        pyg_data = from_networkx(graph)
+        pyg_data.orbits = [torch.tensor(orbit) for orbit in orbits]
+        pyg_data.non_equivariant_orbits = [torch.tensor(orbit) for orbit in non_equivariant_orbits]
+        pyg_list.append(pyg_data)
+    return pyg_list
 
 
 # For all n, count the number of graphs that contain an orbit of size n
