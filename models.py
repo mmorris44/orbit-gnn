@@ -100,3 +100,30 @@ class UniqueIdGCN(GCN):
         ids = torch.unsqueeze(torch.arange(1, x.size()[0] + 1), dim=1)  # [batch * num_nodes, 1]
         extended_x = torch.cat((x, ids), dim=1)  # [batch * num_nodes, in_channels + 1]
         return super().forward(extended_x, edge_index)
+
+
+# does not use one-hot encodings, since graphs have varying sizes
+class OrbitIndivGCN(GCN):
+    def __init__(self, in_channels: int, hidden_channels: int, num_layers: int, out_channels: int):
+        super().__init__(in_channels, hidden_channels, num_layers, out_channels=hidden_channels)
+        # MLP with single hidden layer
+        self.mlp = MLP(in_channels=hidden_channels + 1, hidden_channels=[hidden_channels] + [out_channels])
+
+    def forward(self, x, edge_index, **kwargs):
+        # x: [batch * num_nodes, in_channels]
+        gcn_output = super().forward(x, edge_index)  # [batch * num_nodes, hidden_channels]
+        orbits = kwargs['orbits']
+        # just range for now, no one-hot
+        unique_ids = torch.arange(0, x.size()[0])  # [batch * num_nodes]
+        ids = torch.empty_like(unique_ids)  # [batch * num_nodes]
+        for orbit in orbits:
+            # compute unique IDs for each orbit
+            # e.g. orbit = [0, 1, 4, 6] means that unique_ids_to_append = [0, 1, -, -, 2, -, 3, ...]
+            ids[orbit] = unique_ids[0:orbit.size()[0]]
+
+        # append per-orbit unique IDs to GCN output
+        ids = torch.unsqueeze(ids, dim=1)  # [batch * num_nodes, 1]
+        extended_gcn_output = torch.cat((gcn_output, ids), dim=1)  # [batch * num_nodes, hidden_channels + 1]
+
+        # pass through final MLP
+        return self.mlp(extended_gcn_output)

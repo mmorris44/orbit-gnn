@@ -24,7 +24,7 @@ def model_accuracy(dataset: List[Data], model: torch.nn.Module, device: str) -> 
     for data in dataset:
         # compute predictions and ground truth
         data = data.to(device)
-        out = model(data.x, data.edge_index)
+        out = model(data.x, data.edge_index, orbits=data.orbits)
         predictions = torch.argmax(out, dim=1)  # no need to softmax, since it's monotonic
         ground_truth = data.y  # assume class labels are given in data.y
 

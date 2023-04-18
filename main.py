@@ -8,7 +8,7 @@ from torch_geometric.nn import GAT, GCN
 import wandb
 
 from losses import OrbitSortingCrossEntropyLoss, CrossEntropyLossWrapper
-from models import RniGCN, UniqueIdGCN, UniqueIdDeepSetsGCN
+from models import RniGCN, UniqueIdGCN, UniqueIdDeepSetsGCN, OrbitIndivGCN
 from plotting import plot_labeled_graph
 from testing import model_accuracy
 from wl import check_orbits_against_wl, compute_wl_orbits
@@ -22,7 +22,8 @@ parser.add_argument('--log_interval', type=int, default=10)
 parser.add_argument('--use_wandb', type=int, default=0)
 
 # model
-parser.add_argument('--model', type=str, default='unique_id_gcn', choices=['gcn', 'gat', 'unique_id_gcn', 'rni_gcn'])
+parser.add_argument('--model', type=str, default='orbit_indiv_gcn',
+                    choices=['gcn', 'gat', 'unique_id_gcn', 'rni_gcn', 'orbit_indiv_gcn'])
 parser.add_argument('--gnn_layers', type=int, default=4)
 parser.add_argument('--gnn_hidden_size', type=int, default=40)
 parser.add_argument('--rni_channels', type=int, default=10)
@@ -40,7 +41,7 @@ parser.add_argument('--max_orbit', type=int, default=6)
 parser.add_argument('--learning_rate', type=float, default=0.0001)
 parser.add_argument('--n_epochs', type=int, default=2000)
 parser.add_argument('--changed_node_loss_weight', type=float, default=1)
-parser.add_argument('--loss', type=str, default='orbit_sorting_cross_entropy',
+parser.add_argument('--loss', type=str, default='cross_entropy',
                     choices=['cross_entropy', 'orbit_sorting_cross_entropy'])
 
 # misc
@@ -165,6 +166,13 @@ elif args.model == 'rni_gcn':
         out_channels=out_channels,
         rni_channels=args.rni_channels,
     )
+elif args.model == 'orbit_indiv_gcn':
+    model = OrbitIndivGCN(
+        in_channels=in_channels,
+        hidden_channels=args.gnn_hidden_size,
+        num_layers=args.gnn_layers,
+        out_channels=out_channels,
+    )
 else:
     raise Exception('Model "', args.model, '" not recognized')
 # model = RniGCN(num_node_features=7, num_classes=2, gcn_layers=4, noise_dims=3).to(device)
@@ -182,7 +190,7 @@ for epoch in range(args.n_epochs):
         optimizer.zero_grad()
         data = data.to(device)  # TODO: optimize code for GPU
 
-        out = model(data.x, data.edge_index)
+        out = model(data.x, data.edge_index, orbits=data.orbits)
         loss = criterion(out, data.y, data.non_equivariant_orbits)
 
         # # custom weighting of loss for nodes that change
