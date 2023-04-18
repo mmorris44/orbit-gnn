@@ -39,7 +39,7 @@ parser.add_argument('--max_orbit', type=int, default=6)
 parser.add_argument('--learning_rate', type=float, default=0.0001)
 parser.add_argument('--n_epochs', type=int, default=2000)
 parser.add_argument('--changed_node_loss_weight', type=float, default=1)
-parser.add_argument('--loss', type=str, default='orbit_sorting_cross_entropy',
+parser.add_argument('--loss', type=str, default='cross_entropy',
                     choices=['cross_entropy', 'orbit_sorting_cross_entropy'])
 
 # misc
