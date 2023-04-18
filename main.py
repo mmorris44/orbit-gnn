@@ -10,6 +10,7 @@ import wandb
 from losses import OrbitSortingCrossEntropyLoss, CrossEntropyLossWrapper
 from models import RniGCN, UniqueIdGCN, UniqueIdDeepSetsGCN
 from plotting import plot_labeled_graph
+from testing import model_accuracy
 from wl import check_orbits_against_wl, compute_wl_orbits
 from datasets import nx_molecule_dataset, orbit_molecule_dataset, pyg_dataset_from_nx, nx_from_torch_dataset, \
     combined_bioisostere_dataset, molecule_dataset_orbit_count, alchemy_max_orbit_dataset, pyg_max_orbit_dataset_from_nx
@@ -39,7 +40,7 @@ parser.add_argument('--max_orbit', type=int, default=6)
 parser.add_argument('--learning_rate', type=float, default=0.0001)
 parser.add_argument('--n_epochs', type=int, default=2000)
 parser.add_argument('--changed_node_loss_weight', type=float, default=1)
-parser.add_argument('--loss', type=str, default='cross_entropy',
+parser.add_argument('--loss', type=str, default='orbit_sorting_cross_entropy',
                     choices=['cross_entropy', 'orbit_sorting_cross_entropy'])
 
 # misc
@@ -211,31 +212,19 @@ for epoch in range(args.n_epochs):
         epoch_loss += loss
 
     if (epoch + 1) % args.log_interval == 0:
-
-        total_graph_accuracy = 0
-        total_node_accuracy = 0
-
-        # train accuracy
+        # compute train accuracy
         model.training = False
-        for data in train_dataset:
-            data = data.to(device)
-            out = model(data.x, data.edge_index)
-            # gets 0.9375 node accuracy if just returning input (out = data.x)
-            predictions = torch.argmax(out, dim=1)  # no need to softmax, since it's monotonic
-            ground_truth = data.y  # assume class labels are given in data.y
-            node_accuracy = torch.sum(predictions == ground_truth) / predictions.size()[0]
-            graph_accuracy = 0 if node_accuracy < 0.99 else 1
-            total_node_accuracy += node_accuracy
-            total_graph_accuracy += graph_accuracy
+        node_accuracy, orbit_accuracy, graph_accuracy = model_accuracy(train_dataset, model, device)
+        print('Epoch:', epoch + 1, '| Eval on training dataset | Epoch loss:', epoch_loss.item(), '| Node accuracy:',
+              node_accuracy, '| Orbit accuracy:', orbit_accuracy, '| Graph accuracy:', graph_accuracy)
 
-        # print(model(train_dataset[7]))
-        print(epoch + 1, epoch_loss, total_node_accuracy / len(train_dataset), total_graph_accuracy / len(train_dataset))
         if args.use_wandb:
             wandb.log({
                 'epoch': epoch + 1,
-                'loss': epoch_loss,
-                'node_accuracy': total_node_accuracy / len(train_dataset),
-                'graph_accuracy': total_graph_accuracy / len(train_dataset)
+                'train_loss': epoch_loss,
+                'train_node_accuracy': node_accuracy,
+                'train_orbit_accuracy': orbit_accuracy,
+                'train_graph_accuracy': graph_accuracy,
             })
 
 # TODO: test in a way that makes it not matter which node in the orbit gets the target

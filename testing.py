@@ -6,18 +6,23 @@ from torch_geometric.data import Data
 
 
 def model_accuracy(dataset: List[Data], model: torch.nn.Module, device: str) -> Tuple[float, float, float]:
-    """Compute equivariant model accuracy on the given dataset.
+    """Compute orbit-equivariant model accuracy on the given dataset.
+
+    For each graph, node-level, orbit-level, and graph-level accuracy are computed.
+    These are then averaged over all the graphs.
 
     :param dataset: Dataset to compute accuracy on.
     :param model: GNN model to compute accuracy of.
     :param device: torch device to be used.
     :return: Tuple[node accuracy, orbit accuracy, graph accuracy]
     """
+    # track 3 accuracies
     total_node_accuracy = 0
     total_orbit_accuracy = 0
     total_graph_accuracy = 0
 
     for data in dataset:
+        # compute predictions and ground truth
         data = data.to(device)
         out = model(data.x, data.edge_index)
         predictions = torch.argmax(out, dim=1)  # no need to softmax, since it's monotonic
@@ -26,25 +31,24 @@ def model_accuracy(dataset: List[Data], model: torch.nn.Module, device: str) -> 
         nodes_correct = 0
         orbits_correct = 0
 
+        # check correctness of each orbit
         orbits = data.orbits
         for orbit in orbits:
             orbit_predictions = predictions[orbit].tolist()
             orbit_ground_truth = ground_truth[orbit].tolist()
-            print('orbit_predictions', orbit_predictions)
-            print('orbit_ground_truth', orbit_ground_truth)
+            # compute size of multiset intersection between predictions and ground truth
             intersection_count = 0
             for prediction in orbit_predictions:
                 if prediction in orbit_ground_truth:
                     orbit_ground_truth.remove(prediction)
                     intersection_count += 1
 
+            # update node and orbit counts
             nodes_correct += intersection_count
             if intersection_count == len(orbit):
                 orbits_correct += 1
 
         graphs_correct = 1 if orbits_correct == len(data.orbits) else 0
-
-        print(nodes_correct, orbits_correct, graphs_correct)
 
         total_node_accuracy += nodes_correct / predictions.size()[0]
         total_orbit_accuracy += orbits_correct / len(orbits)
@@ -78,6 +82,31 @@ def test_model_accuracy():
                 [8, 3, 0, 12],
                 [5, 0, 13, 0],
                 [34, 0, 10, 0],
+                [0, 10, 0, 2],
+            ]),
+            y=torch.tensor([3, 0, 2, 2, 1]),
+            orbits=[
+                torch.tensor([0, 1, 3]),
+                torch.tensor([2, 4]),
+            ]),
+        CustomData(
+            x=torch.tensor([
+                [9, 5, 1, 6],
+                [8, 3, 0, 12],
+                [5, 0, 13, 0],
+                [34, 0, 10, 0],
+                [0, 10, 0, 2],
+            ]),
+            y=torch.tensor([3, 0, 2, 2, 1]),
+            orbits=[
+                torch.tensor([0, 1, 2, 3, 4]),
+            ]),
+        CustomData(
+            x=torch.tensor([
+                [9, 5, 1, 6],
+                [8, 3, 0, 12],
+                [5, 0, 13, 0],
+                [10, 0, 34, 0],
                 [0, 10, 0, 2],
             ]),
             y=torch.tensor([3, 0, 2, 2, 1]),
