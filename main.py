@@ -32,7 +32,7 @@ parser.add_argument('--rni_channels', type=int, default=10)
 parser.add_argument('--train_on_entire_dataset', type=int, default=1)
 # filter out non-equivariant examples from the bioisostere dataset
 parser.add_argument('--bioisostere_only_equivariant', type=int, default=0)
-parser.add_argument('--dataset', type=str, default='alchemy',
+parser.add_argument('--dataset', type=str, default='bioisostere',
                     choices=['bioisostere', 'mutag', 'alchemy', 'zinc'])
 # use with alchemy to create a max_orbit dataset, 0 means don't use max_orbit
 parser.add_argument('--max_orbit', type=int, default=6)
@@ -134,9 +134,15 @@ test_dataset = dataset[int(len(dataset) * 0.8):]
 print('Train dataset size:', len(train_dataset))
 print('Test dataset size:', len(test_dataset))
 
-# set up model
+# set input and output channels
 in_channels = train_dataset[0].x.size()[1]
-out_channels = in_channels
+# cannot get out_channels in the same way as in_channels, since targets are not one-hot
+out_channels = in_channels  # same number of classes by default
+if args.dataset == 'bioisostere':
+    # bioisostere dataset has an output class for 'no change'
+    out_channels += 1
+
+# set up model
 if args.model == 'gat':
     model = GAT(
         in_channels=in_channels,

@@ -252,7 +252,7 @@ def alchemy_max_orbit_dataset(
                 target = i
                 target_node_attributes[node] = target
 
-        # one-hot encode the node targets
+        # possibly one-hot encode the node targets
         if one_hot_targets:
             for node, attribute in target_node_attributes.items():
                 one_hot_encoding = [0.0] * num_node_classes
@@ -325,14 +325,16 @@ def combined_bioisostere_dataset(
         targets: List[Data],
         no_change_input_option=True,
         only_equivariant=False,
-):
+        one_hot_targets=False,
+) -> List[Data]:
     """Combine bioisostere inputs and targets into one dataset.
 
     :param inputs: source molecules
     :param targets: optimal bioisosteres
     :param no_change_input_option: for each node, add element to vector which when 1 implies no change from input
     :param only_equivariant: filter out non-equivariant examples from dataset
-    :return:
+    :param one_hot_targets: one-hot encode the node targets
+    :return: List of torch data objects, the combined inputs and targets
     """
     combined_graphs: List[Data] = []
 
@@ -412,7 +414,7 @@ def combined_bioisostere_dataset(
         if only_equivariant and graph_requires_symmetry_breaking:
             continue
 
-        # append combined graph
+        # compute combined graph
         input_graph_pyg = inputs[graph_index]
         if no_change_input_option:
             # last element =1 means no change from input
@@ -420,6 +422,7 @@ def combined_bioisostere_dataset(
         else:
             combined_y = torch.zeros_like(input_graph_pyg.x)
 
+        # set target for graph
         for node in input_graph.nodes:
             if node == swapped_out_node and not input_target_same:
                 combined_y[node, swap_out_for] = 1.0  # one-hot of new swapped node value
@@ -427,8 +430,25 @@ def combined_bioisostere_dataset(
                 combined_y[node, -1] = 1.0  # set flag for no change of node value
             else:
                 combined_y[node, :] = input_graph_pyg.x[node]  # do not change node value
+
+        # possibly remove one-hot encoding of targets, and encode categorically instead
+        if not one_hot_targets:
+            categorical_combined_y = torch.argmax(combined_y, dim=1)
+            combined_y = categorical_combined_y
+
+        # create tensor orbits
+        tensor_orbits = [torch.tensor(orbit) for orbit in input_graph_orbits]
+
+        # create non-equivariant orbits
+        non_equivariant_orbits = []
+        if graph_requires_symmetry_breaking:
+            non_equivariant_orbits = [torch.tensor(orbit) for orbit in input_graph_orbits
+                                      if swapped_out_node in orbit]
+
+        # create combined graph
         combined_graph = Data(x=input_graph_pyg.x, edge_index=input_graph_pyg.edge_index,
-                              edge_attr=input_graph_pyg.edge_attr, y=combined_y, orbits=input_graph_orbits)
+                              edge_attr=input_graph_pyg.edge_attr, y=combined_y, orbits=tensor_orbits,
+                              non_equivariant_orbits=non_equivariant_orbits)
         combined_graphs.append(combined_graph)
 
     print('--- Constructed combined bioisostere dataset ---')

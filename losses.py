@@ -18,6 +18,11 @@ class CrossEntropyLossWrapper(_WeightedLoss):
 
 
 class OrbitSortingCrossEntropyLoss(_WeightedLoss):
+    """
+    Compute loss after re-ordering the targets within each non-equivariant orbit.
+    Re-ordering is done to match the permutation corresponding to sorting the prediction and ground truth, then pairing.
+    The loss assumes that target is categorical, and not one-hot.
+    """
     __constants__ = ['ignore_index', 'reduction', 'label_smoothing']
     ignore_index: int
     label_smoothing: float

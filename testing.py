@@ -10,6 +10,7 @@ def model_accuracy(dataset: List[Data], model: torch.nn.Module, device: str) -> 
 
     For each graph, node-level, orbit-level, and graph-level accuracy are computed.
     These are then averaged over all the graphs.
+    Function assumes that class labels are given in data.y (not one-hot).
 
     :param dataset: Dataset to compute accuracy on.
     :param model: GNN model to compute accuracy of.
