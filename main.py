@@ -13,7 +13,8 @@ from plotting import plot_labeled_graph
 from testing import model_accuracy
 from wl import check_orbits_against_wl, compute_wl_orbits
 from datasets import nx_molecule_dataset, orbit_molecule_dataset, pyg_dataset_from_nx, nx_from_torch_dataset, \
-    combined_bioisostere_dataset, molecule_dataset_orbit_count, alchemy_max_orbit_dataset, pyg_max_orbit_dataset_from_nx
+    combined_bioisostere_dataset, molecule_dataset_orbit_count, alchemy_max_orbit_dataset, \
+    pyg_max_orbit_dataset_from_nx, MaxOrbitGCNTransform
 
 parser = argparse.ArgumentParser()
 
@@ -22,8 +23,8 @@ parser.add_argument('--log_interval', type=int, default=10)
 parser.add_argument('--use_wandb', type=int, default=0)
 
 # model
-parser.add_argument('--model', type=str, default='orbit_indiv_gcn',
-                    choices=['gcn', 'gat', 'unique_id_gcn', 'rni_gcn', 'orbit_indiv_gcn'])
+parser.add_argument('--model', type=str, default='max_orbit_gcn',
+                    choices=['gcn', 'gat', 'unique_id_gcn', 'rni_gcn', 'orbit_indiv_gcn', 'max_orbit_gcn'])
 parser.add_argument('--gnn_layers', type=int, default=4)
 parser.add_argument('--gnn_hidden_size', type=int, default=40)
 parser.add_argument('--rni_channels', type=int, default=10)
@@ -35,7 +36,7 @@ parser.add_argument('--bioisostere_only_equivariant', type=int, default=0)
 parser.add_argument('--dataset', type=str, default='bioisostere',
                     choices=['bioisostere', 'mutag', 'alchemy', 'zinc'])
 # use with alchemy to create a max_orbit dataset, 0 means don't use max_orbit
-parser.add_argument('--max_orbit', type=int, default=6)
+parser.add_argument('--max_orbit', type=int, default=2)
 
 # training
 parser.add_argument('--learning_rate', type=float, default=0.0001)
@@ -125,7 +126,20 @@ elif args.loss == 'orbit_sorting_cross_entropy':
 else:
     raise Exception('Loss "', args.loss, '" not recognized')
 
-# set up dataset
+# set number of input and output channels
+in_channels = dataset[0].x.size()[1]
+# cannot get out_channels in the same way as in_channels, since targets are not one-hot
+out_channels = in_channels  # same number of classes by default
+if args.dataset == 'bioisostere':
+    # bioisostere dataset has an output class for 'no change'
+    out_channels += 1
+
+# add transformed targets to dataset if using max_orbit_gcn
+if args.model == 'max_orbit_gcn':
+    transform = MaxOrbitGCNTransform(args.max_orbit, out_channels)
+    transform.transform_dataset(dataset)
+
+# set up train / test split on dataset
 train_dataset = dataset[0:int(len(dataset) * 0.8)]
 if args.train_on_entire_dataset:
     train_dataset = dataset
@@ -133,14 +147,6 @@ test_dataset = dataset[int(len(dataset) * 0.8):]
 
 print('Train dataset size:', len(train_dataset))
 print('Test dataset size:', len(test_dataset))
-
-# set input and output channels
-in_channels = train_dataset[0].x.size()[1]
-# cannot get out_channels in the same way as in_channels, since targets are not one-hot
-out_channels = in_channels  # same number of classes by default
-if args.dataset == 'bioisostere':
-    # bioisostere dataset has an output class for 'no change'
-    out_channels += 1
 
 # set up model
 if args.model == 'gat':

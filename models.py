@@ -1,4 +1,5 @@
 import copy
+from typing import List
 
 import torch
 import torch.nn.functional as F
@@ -6,6 +7,7 @@ from torch.nn import ModuleList
 from torch_geometric.nn import GCNConv
 from torchvision.ops import MLP
 from torch_geometric.nn import GCN
+from torch_geometric.data import Data
 
 
 class DeprecatedCustomGCN(torch.nn.Module):

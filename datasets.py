@@ -457,3 +457,35 @@ def combined_bioisostere_dataset(
     return combined_graphs
 
 
+class MaxOrbitGCNTransform:
+    def __init__(self, max_orbit: int, out_channels: int):
+        self.max_orbit = max_orbit
+        self.no_change_from_default_flag = out_channels  # output flag for no change from default
+
+    # add transformed targets to the dataset
+    def transform_dataset(self, dataset: List[Data]):
+        for data in dataset:
+            # data.y.size()[0] is number of nodes
+            num_nodes = data.y.size()[0]
+            transformed_y = torch.full((num_nodes, self.max_orbit), self.no_change_from_default_flag)
+            orbits = data.orbits
+            for orbit in orbits:
+                orbit_y_values = data.y[orbit]  # get target values for orbit
+                mode_value, _ = torch.mode(orbit_y_values)  # get most common value in the orbit targets
+                transformed_y[orbit, 0] = mode_value  # set default value for orbit
+
+                # collect other target values in the orbit
+                other_targets = []
+                for target in orbit_y_values:
+                    if target != mode_value:
+                        other_targets.append(target)
+
+                # distribute other target values
+                for i, other_target in enumerate(other_targets):
+                    transformed_y[orbit, i + 1] = other_target
+            data.transformed_y = transformed_y
+
+    # transform output from representation back to actual output
+    # used during evaluation
+    def transform_output(self, output: torch.tensor, input_data: Data) -> torch.tensor:
+        return output
