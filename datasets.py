@@ -484,11 +484,39 @@ class MaxOrbitGCNTransform:
                 for i, other_target in enumerate(other_targets):
                     transformed_y[orbit, i + 1] = other_target
 
-            # flatten the transformed target tensor
+            # flatten the transformed target tensor, so that it can be compared against model output with cross entropy
             transformed_y = torch.flatten(transformed_y)
             data.transformed_y = transformed_y
 
     # transform output from representation back to actual output
     # used during evaluation
     def transform_output(self, output: torch.tensor, input_data: Data) -> torch.tensor:
-        return output
+        # output: [num_nodes * max_orbit, out_channels]
+        out_channels = output.size()[1]
+        num_classes = out_channels - 1  # one output channel reserved for 'no deviation from default'
+        num_nodes = input_data.x.size()[0]
+
+        # make output categorical
+        output = torch.argmax(output, dim=1)  # [num_nodes * max_orbit]
+        output = torch.reshape(output, (num_nodes, self.max_orbit))  # [num_nodes, max_orbit]
+
+        eval_output = torch.empty(num_nodes, dtype=torch.long)  # make eval output categorical for now
+        orbits = input_data.orbits
+        for orbit in orbits:
+            # output is the same for every node in the orbit
+            orbit_output = output[orbit[0]]  # [max_orbit]
+            # set the default value across the entire orbit
+            eval_output[orbit] = orbit_output[0]
+            # set the remaining values
+            for i in range(1, orbit_output.size()[0]):
+                # check if passed the size of the orbit, ignore all past this point
+                if i >= len(orbit):
+                    break
+                # register output if non-default
+                if orbit_output[i] != self.no_change_from_default_flag:
+                    eval_output[orbit[i]] = orbit_output[i]
+
+        # one-hot encode eval_output
+        eval_output = torch.nn.functional.one_hot(eval_output, num_classes=num_classes)
+
+        return eval_output

@@ -1,11 +1,18 @@
 from collections import namedtuple
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 
 import torch.nn
 from torch_geometric.data import Data
 
+from datasets import MaxOrbitGCNTransform
 
-def model_accuracy(dataset: List[Data], model: torch.nn.Module, device: str) -> Tuple[float, float, float]:
+
+def model_accuracy(
+        dataset: List[Data],
+        model: torch.nn.Module,
+        device: str,
+        max_orbit_transform: Optional[MaxOrbitGCNTransform] = None,
+) -> Tuple[float, float, float]:
     """Compute orbit-equivariant model accuracy on the given dataset.
 
     For each graph, node-level, orbit-level, and graph-level accuracy are computed.
@@ -15,6 +22,7 @@ def model_accuracy(dataset: List[Data], model: torch.nn.Module, device: str) -> 
     :param dataset: Dataset to compute accuracy on.
     :param model: GNN model to compute accuracy of.
     :param device: torch device to be used.
+    :param max_orbit_transform: if using a max-orbit GCN transformation, use to convert model output for evaluation
     :return: Tuple[node accuracy, orbit accuracy, graph accuracy]
     """
     # track 3 accuracies
@@ -26,6 +34,11 @@ def model_accuracy(dataset: List[Data], model: torch.nn.Module, device: str) -> 
         # compute predictions and ground truth
         data = data.to(device)
         out = model(data.x, data.edge_index, orbits=data.orbits)
+
+        # transform model output if using a max-orbit transform
+        if max_orbit_transform is not None:
+            out = max_orbit_transform.transform_output(out, data)
+
         predictions = torch.argmax(out, dim=1)  # no need to softmax, since it's monotonic
         ground_truth = data.y  # assume class labels are given in data.y
 

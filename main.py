@@ -33,10 +33,10 @@ parser.add_argument('--rni_channels', type=int, default=10)
 parser.add_argument('--train_on_entire_dataset', type=int, default=1)
 # filter out non-equivariant examples from the bioisostere dataset
 parser.add_argument('--bioisostere_only_equivariant', type=int, default=0)
-parser.add_argument('--dataset', type=str, default='bioisostere',
+parser.add_argument('--dataset', type=str, default='alchemy',
                     choices=['bioisostere', 'mutag', 'alchemy', 'zinc'])
 # use with alchemy to create a max_orbit dataset, 0 means don't use max_orbit
-parser.add_argument('--max_orbit', type=int, default=2)
+parser.add_argument('--max_orbit', type=int, default=6)
 
 # training
 parser.add_argument('--learning_rate', type=float, default=0.0001)
@@ -135,9 +135,10 @@ if args.dataset == 'bioisostere':
     out_channels += 1
 
 # add transformed targets to dataset if using max_orbit_gcn
+max_orbit_transform = None
 if args.model == 'max_orbit_gcn':
-    transform = MaxOrbitGCNTransform(args.max_orbit, out_channels)
-    transform.transform_dataset(dataset)
+    max_orbit_transform = MaxOrbitGCNTransform(args.max_orbit, out_channels)
+    max_orbit_transform.transform_dataset(dataset)
     # max orbit transformation has an extra output class for 'no change from default'
     out_channels += 1
 
@@ -245,7 +246,7 @@ for epoch in range(args.n_epochs):
     if (epoch + 1) % args.log_interval == 0:
         # compute train accuracy
         model.training = False
-        node_accuracy, orbit_accuracy, graph_accuracy = model_accuracy(train_dataset, model, device)
+        node_accuracy, orbit_accuracy, graph_accuracy = model_accuracy(train_dataset, model, device, max_orbit_transform)
         print('Epoch:', epoch + 1, '| Eval on training dataset | Epoch loss:', epoch_loss.item(), '| Node accuracy:',
               node_accuracy, '| Orbit accuracy:', orbit_accuracy, '| Graph accuracy:', graph_accuracy)
 

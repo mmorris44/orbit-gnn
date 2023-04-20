@@ -144,7 +144,7 @@ class MaxOrbitGCN(GCN):
         gcn_output = super().forward(x, edge_index)  # [batch * num_nodes, out_channels]
         mlp_output = self.mlp(gcn_output)
 
-        # reshape tensor to match flattened target
+        # reshape tensor to match flattened target, so that it can be compared using cross entropy
         # [batch * num_nodes * max_orbit, out_channels]
         mlp_output = torch.reshape(mlp_output, (mlp_output.size()[0] * self.max_orbit, -1))
         return mlp_output
