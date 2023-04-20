@@ -8,7 +8,7 @@ from torch_geometric.nn import GAT, GCN
 import wandb
 
 from losses import OrbitSortingCrossEntropyLoss, CrossEntropyLossWrapper
-from models import RniGCN, UniqueIdGCN, UniqueIdDeepSetsGCN, OrbitIndivGCN
+from models import RniGCN, UniqueIdGCN, UniqueIdDeepSetsGCN, OrbitIndivGCN, MaxOrbitGCN
 from plotting import plot_labeled_graph
 from testing import model_accuracy
 from wl import check_orbits_against_wl, compute_wl_orbits
@@ -138,6 +138,8 @@ if args.dataset == 'bioisostere':
 if args.model == 'max_orbit_gcn':
     transform = MaxOrbitGCNTransform(args.max_orbit, out_channels)
     transform.transform_dataset(dataset)
+    # max orbit transformation has an extra output class for 'no change from default'
+    out_channels += 1
 
 # set up train / test split on dataset
 train_dataset = dataset[0:int(len(dataset) * 0.8)]
@@ -185,6 +187,14 @@ elif args.model == 'orbit_indiv_gcn':
         num_layers=args.gnn_layers,
         out_channels=out_channels,
     )
+elif args.model == 'max_orbit_gcn':
+    model = MaxOrbitGCN(
+        in_channels=in_channels,
+        hidden_channels=args.gnn_hidden_size,
+        num_layers=args.gnn_layers,
+        out_channels=out_channels,
+        max_orbit=args.max_orbit,
+    )
 else:
     raise Exception('Model "', args.model, '" not recognized')
 # model = RniGCN(num_node_features=7, num_classes=2, gcn_layers=4, noise_dims=3).to(device)
@@ -203,7 +213,8 @@ for epoch in range(args.n_epochs):
         data = data.to(device)  # TODO: optimize code for GPU
 
         out = model(data.x, data.edge_index, orbits=data.orbits)
-        loss = criterion(out, data.y, data.non_equivariant_orbits)
+        targets = data.transformed_y if args.model == 'max_orbit_gcn' else data.y
+        loss = criterion(out, targets, data.non_equivariant_orbits)
 
         # # custom weighting of loss for nodes that change
         # changed_node_index = -1

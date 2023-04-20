@@ -129,3 +129,22 @@ class OrbitIndivGCN(GCN):
 
         # pass through final MLP
         return self.mlp(extended_gcn_output)
+
+
+class MaxOrbitGCN(GCN):
+    def __init__(self, in_channels: int, hidden_channels: int, num_layers: int, out_channels: int, max_orbit: int):
+        super().__init__(in_channels, hidden_channels, num_layers, out_channels=hidden_channels)
+        self.max_orbit = max_orbit
+        mlp_output_size = max_orbit * out_channels
+        # MLP with single hidden layer to convert to proper output size
+        self.mlp = MLP(in_channels=hidden_channels, hidden_channels=[hidden_channels] + [mlp_output_size])
+
+    def forward(self, x, edge_index, **kwargs):
+        # x: [batch * num_nodes, in_channels]
+        gcn_output = super().forward(x, edge_index)  # [batch * num_nodes, out_channels]
+        mlp_output = self.mlp(gcn_output)
+
+        # reshape tensor to match flattened target
+        # [batch * num_nodes * max_orbit, out_channels]
+        mlp_output = torch.reshape(mlp_output, (mlp_output.size()[0] * self.max_orbit, -1))
+        return mlp_output

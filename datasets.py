@@ -483,6 +483,9 @@ class MaxOrbitGCNTransform:
                 # distribute other target values
                 for i, other_target in enumerate(other_targets):
                     transformed_y[orbit, i + 1] = other_target
+
+            # flatten the transformed target tensor
+            transformed_y = torch.flatten(transformed_y)
             data.transformed_y = transformed_y
 
     # transform output from representation back to actual output
