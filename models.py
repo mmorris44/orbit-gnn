@@ -1,5 +1,5 @@
 import copy
-from typing import List
+from typing import List, Optional
 
 import torch
 import torch.nn.functional as F
@@ -80,41 +80,68 @@ class UniqueIdDeepSetsGCN(DeprecatedCustomGCN):
         return final_outputs
 
 
-class RniGCN(GCN):
+class CustomPygGCN(torch.nn.Module):
+    """Wrapper for torch geometric GCN, to allow for OrbitIndivGCN forward() method"""
+    def __init__(self, in_channels: int, hidden_channels: int, num_layers: int, out_channels: int):
+        super().__init__()
+        self.gcn = GCN(in_channels, hidden_channels, num_layers, out_channels)
+
+    def init_conv(self, in_channels, out_channels: int, **kwargs):
+        return self.gcn.init_conv(in_channels, out_channels, **kwargs)
+
+    def reset_parameters(self):
+        self.gcn.reset_parameters()
+
+    def forward(
+            self,
+            x: torch.tensor,
+            edge_index: torch.tensor,
+            orbits: Optional[List[torch.tensor]],
+    ) -> torch.tensor:
+        return self.gcn(x, edge_index)
+
+    @torch.no_grad()
+    def inference(self, loader, device=None, progress_bar=False):
+        return self.gcn.inference(loader, device, progress_bar)
+
+    def __repr__(self):
+        return self.gcn.__repr__()
+
+
+class RniGCN(CustomPygGCN):
     def __init__(self, in_channels: int, hidden_channels: int, num_layers: int, out_channels: int, rni_channels: int):
         super().__init__(in_channels + rni_channels, hidden_channels, num_layers, out_channels)
         self.rni_channels = rni_channels
 
-    def forward(self, x, edge_index, **kwargs):
+    def forward(self, x, edge_index, orbits):
         # x: [batch * num_nodes, in_channels]
         noise = torch.rand(x.size()[0], self.rni_channels)  # [batch * num_nodes, in_channels]
         extended_x = torch.cat((x, noise), dim=1)  # [batch * num_nodes, in_channels + rni_channels]
-        return super().forward(extended_x, edge_index)
+        return super().forward(extended_x, edge_index, orbits)
 
 
 # does not use one-hot encodings, since graphs have varying sizes
-class UniqueIdGCN(GCN):
+class UniqueIdGCN(CustomPygGCN):
     def __init__(self, in_channels: int, hidden_channels: int, num_layers: int, out_channels: int):
         super().__init__(in_channels + 1, hidden_channels, num_layers, out_channels)
 
-    def forward(self, x, edge_index, **kwargs):
+    def forward(self, x, edge_index, orbits):
         # x: [batch * num_nodes, in_channels]
         ids = torch.unsqueeze(torch.arange(1, x.size()[0] + 1), dim=1)  # [batch * num_nodes, 1]
         extended_x = torch.cat((x, ids), dim=1)  # [batch * num_nodes, in_channels + 1]
-        return super().forward(extended_x, edge_index)
+        return super().forward(extended_x, edge_index, orbits)
 
 
 # does not use one-hot encodings, since graphs have varying sizes
-class OrbitIndivGCN(GCN):
+class OrbitIndivGCN(CustomPygGCN):
     def __init__(self, in_channels: int, hidden_channels: int, num_layers: int, out_channels: int):
         super().__init__(in_channels, hidden_channels, num_layers, out_channels=hidden_channels)
         # MLP with single hidden layer
         self.mlp = MLP(in_channels=hidden_channels + 1, hidden_channels=[hidden_channels] + [out_channels])
 
-    def forward(self, x, edge_index, **kwargs):
+    def forward(self, x, edge_index, orbits):
         # x: [batch * num_nodes, in_channels]
-        gcn_output = super().forward(x, edge_index)  # [batch * num_nodes, hidden_channels]
-        orbits = kwargs['orbits']
+        gcn_output = super().forward(x, edge_index, orbits)  # [batch * num_nodes, hidden_channels]
         # just range for now, no one-hot
         unique_ids = torch.arange(0, x.size()[0])  # [batch * num_nodes]
         ids = torch.empty_like(unique_ids)  # [batch * num_nodes]
@@ -131,7 +158,7 @@ class OrbitIndivGCN(GCN):
         return self.mlp(extended_gcn_output)
 
 
-class MaxOrbitGCN(GCN):
+class MaxOrbitGCN(CustomPygGCN):
     def __init__(self, in_channels: int, hidden_channels: int, num_layers: int, out_channels: int, max_orbit: int):
         super().__init__(in_channels, hidden_channels, num_layers, out_channels=hidden_channels)
         self.max_orbit = max_orbit
@@ -139,9 +166,9 @@ class MaxOrbitGCN(GCN):
         # MLP with single hidden layer to convert to proper output size
         self.mlp = MLP(in_channels=hidden_channels, hidden_channels=[hidden_channels] + [mlp_output_size])
 
-    def forward(self, x, edge_index, **kwargs):
+    def forward(self, x, edge_index, orbits):
         # x: [batch * num_nodes, in_channels]
-        gcn_output = super().forward(x, edge_index)  # [batch * num_nodes, out_channels]
+        gcn_output = super().forward(x, edge_index, orbits)  # [batch * num_nodes, out_channels]
         mlp_output = self.mlp(gcn_output)
 
         # reshape tensor to match flattened target, so that it can be compared using cross entropy

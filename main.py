@@ -8,7 +8,7 @@ from torch_geometric.nn import GAT, GCN
 import wandb
 
 from losses import OrbitSortingCrossEntropyLoss, CrossEntropyLossWrapper
-from models import RniGCN, UniqueIdGCN, UniqueIdDeepSetsGCN, OrbitIndivGCN, MaxOrbitGCN
+from models import RniGCN, UniqueIdGCN, UniqueIdDeepSetsGCN, OrbitIndivGCN, MaxOrbitGCN, CustomPygGCN
 from plotting import plot_labeled_graph
 from testing import model_accuracy
 from wl import check_orbits_against_wl, compute_wl_orbits
@@ -40,7 +40,7 @@ parser.add_argument('--bioisostere_only_equivariant', type=int, default=0)
 parser.add_argument('--dataset', type=str, default='bioisostere',
                     choices=['bioisostere', 'mutag', 'alchemy', 'zinc'])
 # use with alchemy to create a max_orbit dataset, 0 means don't use max_orbit
-parser.add_argument('--max_orbit_alchemy', type=int, default=6)
+parser.add_argument('--max_orbit_alchemy', type=int, default=2)
 parser.add_argument('--shuffle_dataset', type=int, default=0)
 
 # training
@@ -172,7 +172,7 @@ if args.model == 'gat':
         out_channels=out_channels,
     )
 elif args.model == 'gcn':
-    model = GCN(
+    model = CustomPygGCN(
         in_channels=in_channels,
         hidden_channels=args.gnn_hidden_size,
         num_layers=args.gnn_layers,
