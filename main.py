@@ -19,7 +19,7 @@ from datasets import nx_molecule_dataset, orbit_molecule_dataset, pyg_dataset_fr
 parser = argparse.ArgumentParser()
 
 # logging options
-parser.add_argument('--log_interval', type=int, default=10)
+parser.add_argument('--loss_log_interval', type=int, default=10)
 parser.add_argument('--use_wandb', type=int, default=0)
 
 # model
@@ -28,15 +28,20 @@ parser.add_argument('--model', type=str, default='max_orbit_gcn',
 parser.add_argument('--gnn_layers', type=int, default=4)
 parser.add_argument('--gnn_hidden_size', type=int, default=40)
 parser.add_argument('--rni_channels', type=int, default=10)
+# max orbit of max-orbit model, only used for max_orbit_gcn
+parser.add_argument('--model_max_orbit', type=int, default=2)
 
 # dataset
 parser.add_argument('--train_on_entire_dataset', type=int, default=1)
+# how much of the data should be used for the train set
+parser.add_argument('--train_split', type=float, default=0.9)
 # filter out non-equivariant examples from the bioisostere dataset
 parser.add_argument('--bioisostere_only_equivariant', type=int, default=0)
-parser.add_argument('--dataset', type=str, default='alchemy',
+parser.add_argument('--dataset', type=str, default='bioisostere',
                     choices=['bioisostere', 'mutag', 'alchemy', 'zinc'])
 # use with alchemy to create a max_orbit dataset, 0 means don't use max_orbit
-parser.add_argument('--max_orbit', type=int, default=6)
+parser.add_argument('--max_orbit_alchemy', type=int, default=6)
+parser.add_argument('--shuffle_dataset', type=int, default=0)
 
 # training
 parser.add_argument('--learning_rate', type=float, default=0.0001)
@@ -44,6 +49,10 @@ parser.add_argument('--n_epochs', type=int, default=2000)
 parser.add_argument('--changed_node_loss_weight', type=float, default=1)
 parser.add_argument('--loss', type=str, default='cross_entropy',
                     choices=['cross_entropy', 'orbit_sorting_cross_entropy'])
+
+# evaluation
+parser.add_argument('--train_eval_interval', type=int, default=10)
+parser.add_argument('--test_eval_interval', type=int, default=10)
 
 # misc
 parser.add_argument('--seed', type=int, default=0)
@@ -94,23 +103,22 @@ if args.dataset == 'bioisostere':
 elif args.dataset == 'mutag':
     mutag_nx, num_node_classes = nx_molecule_dataset('MUTAG')
     print('MUTAG orbit size counts:', molecule_dataset_orbit_count(mutag_nx))
-    # random.shuffle(mutag_nx)  # shuffle dataset
     orbit_mutag_nx = orbit_molecule_dataset(mutag_nx, num_features=7)
     orbit_mutag_dataset = pyg_dataset_from_nx(orbit_mutag_nx)
     dataset = orbit_mutag_dataset
 elif args.dataset == 'alchemy':
     alchemy_nx, num_node_classes = nx_molecule_dataset('alchemy_full')
-    if args.max_orbit >= 2:
+    if args.max_orbit_alchemy >= 2:
         orbit_alchemy_nx = alchemy_max_orbit_dataset(
             dataset=alchemy_nx,
             num_node_classes=num_node_classes,
             extended_dataset_size=1000,  # TODO: make arg
-            max_orbit=args.max_orbit
+            max_orbit=args.max_orbit_alchemy
         )
         orbit_alchemy_pyg = pyg_max_orbit_dataset_from_nx(orbit_alchemy_nx)
         dataset = orbit_alchemy_pyg
     else:
-        raise Exception('Alchemy currently only supported with args.max_orbit >= 2')
+        raise Exception('Alchemy currently only supported with args.max_orbit_alchemy >= 2')
 elif args.dataset == 'zinc':
     zinc_nx, num_node_classes = nx_molecule_dataset('ZINC_full')
     print('zinc orbit size counts:', molecule_dataset_orbit_count(zinc_nx))
@@ -137,16 +145,20 @@ if args.dataset == 'bioisostere':
 # add transformed targets to dataset if using max_orbit_gcn
 max_orbit_transform = None
 if args.model == 'max_orbit_gcn':
-    max_orbit_transform = MaxOrbitGCNTransform(args.max_orbit, out_channels)
+    max_orbit_transform = MaxOrbitGCNTransform(args.model_max_orbit, out_channels)
     max_orbit_transform.transform_dataset(dataset)
     # max orbit transformation has an extra output class for 'no change from default'
     out_channels += 1
 
+# possibly shuffle the dataset
+if args.shuffle_dataset:
+    random.shuffle(dataset)
+
 # set up train / test split on dataset
-train_dataset = dataset[0:int(len(dataset) * 0.8)]
+train_dataset = dataset[0:int(len(dataset) * args.train_split)]
 if args.train_on_entire_dataset:
     train_dataset = dataset
-test_dataset = dataset[int(len(dataset) * 0.8):]
+test_dataset = dataset[int(len(dataset) * args.train_split):]
 
 print('Train dataset size:', len(train_dataset))
 print('Test dataset size:', len(test_dataset))
@@ -194,12 +206,10 @@ elif args.model == 'max_orbit_gcn':
         hidden_channels=args.gnn_hidden_size,
         num_layers=args.gnn_layers,
         out_channels=out_channels,
-        max_orbit=args.max_orbit,
+        max_orbit=args.model_max_orbit,
     )
 else:
     raise Exception('Model "', args.model, '" not recognized')
-# model = RniGCN(num_node_features=7, num_classes=2, gcn_layers=4, noise_dims=3).to(device)
-# model = UniqueIdDeepSetsGCN(num_node_features=7, num_classes=2, gcn_layers=4).to(device)
 
 optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate, weight_decay=5e-4)
 
@@ -207,7 +217,6 @@ optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate, weight_d
 print('Training model')
 model.train()
 for epoch in range(args.n_epochs):
-    model.training = True
     epoch_loss = 0
     for data in train_dataset:
         optimizer.zero_grad()
@@ -243,23 +252,51 @@ for epoch in range(args.n_epochs):
         optimizer.step()
         epoch_loss += loss
 
-    if (epoch + 1) % args.log_interval == 0:
-        # compute train accuracy
-        model.training = False
-        node_accuracy, orbit_accuracy, graph_accuracy = model_accuracy(train_dataset, model, device, max_orbit_transform)
-        print('Epoch:', epoch + 1, '| Eval on training dataset | Epoch loss:', epoch_loss.item(), '| Node accuracy:',
-              node_accuracy, '| Orbit accuracy:', orbit_accuracy, '| Graph accuracy:', graph_accuracy)
+    # log results from epoch
+    if (epoch + 1) % args.loss_log_interval == 0:
+        # log the loss
+        print('Epoch:', epoch + 1, '| Epoch loss:', epoch_loss.item())
 
         if args.use_wandb:
             wandb.log({
                 'epoch': epoch + 1,
                 'train_loss': epoch_loss,
+            }, step=epoch + 1)
+
+    if (epoch + 1) % args.train_eval_interval == 0:
+        # compute train accuracy
+        model.training = False
+        node_accuracy, orbit_accuracy, graph_accuracy = model_accuracy(
+            train_dataset, model, device, max_orbit_transform)
+        model.training = True
+        print('Epoch:', epoch + 1, '| Eval on training dataset | Node accuracy:', node_accuracy,
+              '| Orbit accuracy:', orbit_accuracy, '| Graph accuracy:', graph_accuracy)
+
+        if args.use_wandb:
+            wandb.log({
+                'epoch': epoch + 1,
                 'train_node_accuracy': node_accuracy,
                 'train_orbit_accuracy': orbit_accuracy,
                 'train_graph_accuracy': graph_accuracy,
-            })
+            }, step=epoch + 1)
 
-# TODO: test in a way that makes it not matter which node in the orbit gets the target
+    if (epoch + 1) % args.test_eval_interval == 0:
+        # compute test accuracy
+        model.training = False
+        node_accuracy, orbit_accuracy, graph_accuracy = model_accuracy(
+            test_dataset, model, device, max_orbit_transform)
+        model.training = True
+        print('Epoch:', epoch + 1, '| Eval on test dataset | Node accuracy:', node_accuracy,
+              '| Orbit accuracy:', orbit_accuracy, '| Graph accuracy:', graph_accuracy)
+
+        if args.use_wandb:
+            wandb.log({
+                'epoch': epoch + 1,
+                'test_node_accuracy': node_accuracy,
+                'test_orbit_accuracy': orbit_accuracy,
+                'test_graph_accuracy': graph_accuracy,
+            }, step=epoch + 1)
+
 # (just compare the set intersections for each orbit)
 
 # print('\n--- MUTAG orbits ---')
