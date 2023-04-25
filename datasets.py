@@ -8,6 +8,7 @@ from torch_geometric.data import Data
 from torch_geometric.utils.convert import to_networkx, from_networkx
 import networkx as nx
 import networkx.algorithms.isomorphism as iso
+import random
 
 import plotting
 from graph_theory import compute_orbits
@@ -129,6 +130,7 @@ def alchemy_max_orbit_dataset(
         extended_dataset_size: int,
         max_orbit=2,
         one_hot_targets=False,
+        shuffle_targets_within_orbits=True,
 ) -> List[Tuple[nx.Graph, List[List[int]], List[List[int]]]]:
     # returns a list of (graph, orbits, non-equivariant orbits) tuples
     print('Constructing max orbit dataset from alchemy:', len(dataset), '->', extended_dataset_size)
@@ -247,8 +249,12 @@ def alchemy_max_orbit_dataset(
 
         # each node in the largest orbit will target a unique output i, up to max_orbit unique values
         for orbit in largest_orbits:
+            # possibly shuffle the orbit before assigning
+            orbit_copy = orbit[:]
+            if shuffle_targets_within_orbits:
+                random.shuffle(orbit_copy)
             for i in range(1, max_orbit):  # already one unique value (0)
-                node = orbit[i]
+                node = orbit_copy[i]
                 target = i
                 target_node_attributes[node] = target
 

@@ -23,7 +23,7 @@ parser.add_argument('--loss_log_interval', type=int, default=10)
 parser.add_argument('--use_wandb', type=int, default=0)
 
 # model
-parser.add_argument('--model', type=str, default='max_orbit_gcn',
+parser.add_argument('--model', type=str, default='orbit_indiv_gcn',
                     choices=['gcn', 'gat', 'unique_id_gcn', 'rni_gcn', 'orbit_indiv_gcn', 'max_orbit_gcn'])
 parser.add_argument('--gnn_layers', type=int, default=4)
 parser.add_argument('--gnn_hidden_size', type=int, default=40)
@@ -37,10 +37,12 @@ parser.add_argument('--train_on_entire_dataset', type=int, default=1)
 parser.add_argument('--train_split', type=float, default=0.9)
 # filter out non-equivariant examples from the bioisostere dataset
 parser.add_argument('--bioisostere_only_equivariant', type=int, default=0)
-parser.add_argument('--dataset', type=str, default='bioisostere',
+parser.add_argument('--dataset', type=str, default='alchemy',
                     choices=['bioisostere', 'mutag', 'alchemy', 'zinc'])
 # use with alchemy to create a max_orbit dataset, 0 means don't use max_orbit
 parser.add_argument('--max_orbit_alchemy', type=int, default=2)
+# when creating a max_orbit dataset, shuffle the target order within the max orbits
+parser.add_argument('--shuffle_targets_in_max_orbit', type=int, default=1)
 parser.add_argument('--shuffle_dataset', type=int, default=0)
 
 # training
@@ -113,7 +115,8 @@ elif args.dataset == 'alchemy':
             dataset=alchemy_nx,
             num_node_classes=num_node_classes,
             extended_dataset_size=1000,  # TODO: make arg
-            max_orbit=args.max_orbit_alchemy
+            max_orbit=args.max_orbit_alchemy,
+            shuffle_targets_within_orbits=args.shuffle_targets_in_max_orbit,
         )
         orbit_alchemy_pyg = pyg_max_orbit_dataset_from_nx(orbit_alchemy_nx)
         dataset = orbit_alchemy_pyg

@@ -169,7 +169,7 @@ class MaxOrbitGCN(CustomPygGCN):
     def forward(self, x, edge_index, orbits):
         # x: [batch * num_nodes, in_channels]
         gcn_output = super().forward(x, edge_index, orbits)  # [batch * num_nodes, out_channels]
-        mlp_output = self.mlp(gcn_output)
+        mlp_output = self.mlp(gcn_output)  # [batch * num_nodes, max_orbit * out_channels]
 
         # reshape tensor to match flattened target, so that it can be compared using cross entropy
         # [batch * num_nodes * max_orbit, out_channels]
