@@ -273,7 +273,7 @@ def alchemy_max_orbit_dataset(
         # add the non-equivariant orbits to the tuple (the largest ones)
         extended_dataset[graph_index] = (graph, orbits, largest_orbits)
 
-    print('Target set, all features one-hot encoded')
+    print('Targets set')
 
     # visualize graphs for debugging
     # for graph, orbits, largest_orbits in extended_dataset:

@@ -3,6 +3,7 @@ from typing import List, Optional
 
 import torch
 import torch.nn.functional as F
+import torch_geometric.nn.pool
 from torch.nn import ModuleList
 from torch_geometric.nn import GCNConv
 from torchvision.ops import MLP
@@ -118,6 +119,42 @@ class RniGCN(CustomPygGCN):
         noise = torch.rand(x.size()[0], self.rni_channels)  # [batch * num_nodes, in_channels]
         extended_x = torch.cat((x, noise), dim=1)  # [batch * num_nodes, in_channels + rni_channels]
         return super().forward(extended_x, edge_index, orbits)
+
+
+class RniMaxPoolGCN(torch.nn.Module):
+    def __init__(self, in_channels: int, hidden_channels: int, num_layers: int, out_channels: int, rni_channels: int):
+        super().__init__()
+        assert num_layers > 0
+        in_channels = in_channels + rni_channels
+        self.rni_channels = rni_channels
+        self.out_channels = out_channels
+
+        self.conv_layers = []
+        self.mlp_merge_layers = []  # used to combine output of GCN and max pooling
+        for i in range(num_layers):
+            input_size = in_channels if i == 0 else hidden_channels
+            output_size = out_channels if i == num_layers - 1 else hidden_channels
+            self.conv_layers.append(GCNConv(input_size, hidden_channels))  # conv always goes to hidden channels
+            self.mlp_merge_layers.append(MLP(in_channels=hidden_channels * 2, hidden_channels=[output_size]))
+        self.conv_layers = ModuleList(self.conv_layers)
+        self.mlp_merge_layers = ModuleList(self.mlp_merge_layers)
+
+    def forward(self, x, edge_index, orbits):
+        # x: [batch * num_nodes, in_channels]
+        noise = torch.rand(x.size()[0], self.rni_channels)  # [batch * num_nodes, in_channels]
+        x = torch.cat((x, noise), dim=1)  # [batch * num_nodes, in_channels + rni_channels]
+
+        for i, conv in enumerate(self.conv_layers):
+            x = conv(x, edge_index)  # [batch * num_nodes, hidden_channels]
+            max_pool = torch_geometric.nn.pool.global_max_pool(x, batch=None)  # [1, hidden_channels]
+            max_pool = max_pool.expand(x.size()[0], x.size()[1])  # [batch * num_nodes, hidden_channels]
+            combined_x = torch.cat((x, max_pool), dim=1)  # [batch * num_nodes, 2 * hidden_channels]
+            x = self.mlp_merge_layers[i](combined_x)
+
+            # do not use activation function in the final layer
+            if i < len(self.conv_layers) - 1:
+                x = F.relu(x)
+        return x
 
 
 # does not use one-hot encodings, since graphs have varying sizes
