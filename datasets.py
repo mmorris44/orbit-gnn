@@ -253,9 +253,9 @@ def alchemy_max_orbit_dataset(
             orbit_copy = orbit[:]
             if shuffle_targets_within_orbits:
                 random.shuffle(orbit_copy)
-            for i in range(1, max_orbit):  # already one unique value (0)
+            for i in range(0, max_orbit):
                 node = orbit_copy[i]
-                target = i
+                target = i + 1  # don't target the same as the default nodes (0)
                 target_node_attributes[node] = target
 
         # possibly one-hot encode the node targets

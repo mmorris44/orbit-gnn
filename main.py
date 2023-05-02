@@ -23,13 +23,13 @@ parser.add_argument('--loss_log_interval', type=int, default=10)
 parser.add_argument('--use_wandb', type=int, default=0)
 
 # model
-parser.add_argument('--model', type=str, default='rni_gcn',
+parser.add_argument('--model', type=str, default='orbit_indiv_gcn',
                     choices=['gcn', 'gat', 'unique_id_gcn', 'rni_gcn', 'orbit_indiv_gcn', 'max_orbit_gcn'])
 parser.add_argument('--gnn_layers', type=int, default=4)
 parser.add_argument('--gnn_hidden_size', type=int, default=40)
 parser.add_argument('--rni_channels', type=int, default=10)
 # max orbit of max-orbit model, only used for max_orbit_gcn
-parser.add_argument('--model_max_orbit', type=int, default=2)
+parser.add_argument('--model_max_orbit', type=int, default=6)
 
 # dataset
 parser.add_argument('--train_on_entire_dataset', type=int, default=1)
@@ -39,8 +39,8 @@ parser.add_argument('--train_split', type=float, default=0.9)
 parser.add_argument('--bioisostere_only_equivariant', type=int, default=0)
 parser.add_argument('--dataset', type=str, default='alchemy',
                     choices=['bioisostere', 'mutag', 'alchemy', 'zinc'])
-# use with alchemy to create a max_orbit dataset, 0 means don't use max_orbit
-parser.add_argument('--max_orbit_alchemy', type=int, default=2)
+# use with alchemy to create a max_orbit dataset
+parser.add_argument('--max_orbit_alchemy', type=int, default=6)
 # when creating a max_orbit dataset, shuffle the target order within the max orbits
 parser.add_argument('--shuffle_targets_in_max_orbit', type=int, default=1)
 parser.add_argument('--shuffle_dataset', type=int, default=0)
@@ -49,7 +49,7 @@ parser.add_argument('--shuffle_dataset', type=int, default=0)
 parser.add_argument('--learning_rate', type=float, default=0.0001)
 parser.add_argument('--n_epochs', type=int, default=2000)
 parser.add_argument('--changed_node_loss_weight', type=float, default=1)
-parser.add_argument('--loss', type=str, default='cross_entropy',
+parser.add_argument('--loss', type=str, default='orbit_sorting_cross_entropy',
                     choices=['cross_entropy', 'orbit_sorting_cross_entropy'])
 
 # evaluation
@@ -144,6 +144,9 @@ out_channels = in_channels  # same number of classes by default
 if args.dataset == 'bioisostere':
     # bioisostere dataset has an output class for 'no change'
     out_channels += 1
+if args.dataset == 'alchemy' and out_channels < args.max_orbit_alchemy + 1:
+    # alchemy might not have enough output channels to distribute the max_orbit labels
+    out_channels = args.max_orbit_alchemy + 1
 
 # add transformed targets to dataset if using max_orbit_gcn
 max_orbit_transform = None
