@@ -248,7 +248,12 @@ def alchemy_max_orbit_dataset(
         target_node_attributes = {node: 0 for node in graph.nodes}
 
         # each node in the largest orbit will target a unique output i, up to max_orbit unique values
+        # targets are from {1, 2, ..., max_orbit}, with the remainder of the values in the largest orbit being 1
         for orbit in largest_orbits:
+            # assign default target of 1 to all in orbit
+            for node in orbit:
+                target_node_attributes[node] = 1
+
             # possibly shuffle the orbit before assigning
             orbit_copy = orbit[:]
             if shuffle_targets_within_orbits:
